@@ -1,3 +1,6 @@
+#include "SDL3/SDL_events.h"
+#include "SDL3/SDL_surface.h"
+#include <SDL3/SDL.h>
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -10,14 +13,14 @@
 uint32_t framebuffer[WIDTH * HEIGHT];
 
 // Function to create a 32-bit ARGB color
-uint32_t create_color(int r, int g, int b) {
+uint32_t pack_color(int r, int g, int b) {
   return (255 << 24) | (r << 16) | (g << 8) | b; // 0xAARRGGBB
 }
 
 // Function to set a pixel in the framebuffer
 void set_pixel(int x, int y, int r, int g, int b) {
   if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT) {
-    framebuffer[y * WIDTH + x] = create_color(r, g, b);
+    framebuffer[y * WIDTH + x] = pack_color(r, g, b);
   }
 }
 
@@ -91,44 +94,10 @@ void fill_span(int y, int x_start, int x_end, uint8_t r, uint8_t g, uint8_t b) {
   }
 }
 
-// Function to draw a filled triangle
-void draw_filled_triangle(int x0, int y0, int x1, int y1, int x2, int y2,
-                          uint8_t r, uint8_t g, uint8_t b) {
-  // Sort vertices by Y-coordinate (y0 <= y1 <= y2)
-  if (y0 > y1) {
-    swap(&x0, &x1);
-    swap(&y0, &y1);
-  }
-  if (y0 > y2) {
-    swap(&x0, &x2);
-    swap(&y0, &y2);
-  }
-  if (y1 > y2) {
-    swap(&x1, &x2);
-    swap(&y1, &y2);
-  }
+typedef struct {
+  int x, y;
+} Point;
 
-  // Compute inverse slopes
-  float dx0 = (y1 - y0) ? (float)(x1 - x0) / (y1 - y0) : 0;
-  float dx1 = (y2 - y0) ? (float)(x2 - x0) / (y2 - y0) : 0;
-  float dx2 = (y2 - y1) ? (float)(x2 - x1) / (y2 - y1) : 0;
-
-  // Rasterize top half (flat-bottom)
-  float x_left = x0, x_right = x0;
-  for (int y = y0; y < y1; y++) {
-    fill_span(y, (int)x_left, (int)x_right, r, g, b);
-    x_left += dx0;
-    x_right += dx1;
-  }
-
-  // Rasterize bottom half (flat-top)
-  x_left = x1;
-  for (int y = y1; y < y2; y++) {
-    fill_span(y, (int)x_left, (int)x_right, r, g, b);
-    x_left += dx2;
-    x_right += dx1;
-  }
-}
 
 // Plot line
 void plot_line(int x0, int y0, int x1, int y1, int r, int g, int b) {
@@ -153,56 +122,150 @@ void plot_line(int x0, int y0, int x1, int y1, int r, int g, int b) {
   }
 }
 
-// Function to compute perpendicular offset points
-void compute_perpendicular_offset(int x0, int y0, int x1, int y1, float width,
-                                  int *ox0, int *oy0, int *ox1, int *oy1) {
-  float dx = x1 - x0;
-  float dy = y1 - y0;
-  float length = sqrtf(dx * dx + dy * dy);
+// Draw a horizontal span (fast memory access)
+void draw_span(int y, int x0, int x1, uint32_t color) {
+    if (y < 0 || y >= HEIGHT || x0 >= WIDTH || x1 < 0) return;
 
-  if (length == 0)
-    return; // Avoid division by zero
+    if (x0 > x1) { int temp = x0; x0 = x1; x1 = temp; } // Ensure x0 < x1
+    if (x0 < 0) x0 = 0;
+    if (x1 >= WIDTH) x1 = WIDTH - 1;
 
-  // Normalize perpendicular vector
-  float nx = -dy / length;
-  float ny = dx / length;
-
-  // Scale by half the line width
-  float half_width = width * 0.5f;
-  nx *= half_width;
-  ny *= half_width;
-
-  // Compute the two offset points for each endpoint
-  *ox0 = (int)(x0 + nx);
-  *oy0 = (int)(y0 + ny);
-  *ox1 = (int)(x1 + nx);
-  *oy1 = (int)(y1 + ny);
+    uint32_t *row = &framebuffer[y * WIDTH + x0];
+    for (int x = x0; x <= x1; x++) {
+        row[x - x0] = color;
+    }
 }
 
-// Function to draw a variable-width line as two triangles
-void draw_variable_width_line(int x0, int y0, int x1, int y1, float width,
-                              uint8_t r, uint8_t g, uint8_t b) {
-  int ax0, ay0, ax1, ay1;
-  int bx0, by0, bx1, by1;
+// Rasterize a filled triangle (split for scanline rendering)
+void draw_filled_triangle(Point p0, Point p1, Point p2, uint32_t color) {
+    // Sort points by y-coordinate
+    if (p1.y < p0.y) { Point tmp = p0; p0 = p1; p1 = tmp; }
+    if (p2.y < p0.y) { Point tmp = p0; p0 = p2; p2 = tmp; }
+    if (p2.y < p1.y) { Point tmp = p1; p1 = p2; p2 = tmp; }
 
-  // Compute offset points for both sides of the line
-  compute_perpendicular_offset(x0, y0, x1, y1, width, &ax0, &ay0, &ax1, &ay1);
-  compute_perpendicular_offset(x0, y0, x1, y1, -width, &bx0, &by0, &bx1, &by1);
+    float dx01 = (p1.y - p0.y) ? (float)(p1.x - p0.x) / (p1.y - p0.y) : 0;
+    float dx02 = (p2.y - p0.y) ? (float)(p2.x - p0.x) / (p2.y - p0.y) : 0;
+    float dx12 = (p2.y - p1.y) ? (float)(p2.x - p1.x) / (p2.y - p1.y) : 0;
 
-  // Draw two triangles to form the rectangle
-  draw_filled_triangle(ax0, ay0, ax1, ay1, bx0, by0, r, g, b);
-  draw_filled_triangle(ax1, ay1, bx0, by0, bx1, by1, r, g, b);
+    float xa = p0.x, xb = p0.x;
+    for (int y = p0.y; y < p1.y; y++) {
+        draw_span(y, (int)xa, (int)xb, color);
+        xa += dx01;
+        xb += dx02;
+    }
+
+    xa = p1.x;
+    for (int y = p1.y; y < p2.y; y++) {
+        draw_span(y, (int)xa, (int)xb, color);
+        xa += dx12;
+        xb += dx02;
+    }
+}
+
+// Draw a thick line as a rectangle
+void draw_thick_line(Point p0, Point p1, int width, uint8_t r, uint8_t g, uint8_t b) {
+    if (width < 1) return;
+
+    // Compute direction vector
+    float dx = p1.x - p0.x;
+    float dy = p1.y - p0.y;
+    float length = sqrtf(dx * dx + dy * dy);
+    if (length == 0) return;
+
+    // Normalize and find perpendicular
+    float nx = -dy / length;
+    float ny = dx / length;
+
+    // Scale by half width
+    float half_w = width * 0.5f;
+    nx *= half_w;
+    ny *= half_w;
+
+    // Compute rectangle corners
+    Point v0 = { p0.x + (int)nx, p0.y + (int)ny };
+    Point v1 = { p0.x - (int)nx, p0.y - (int)ny };
+    Point v2 = { p1.x + (int)nx, p1.y + (int)ny };
+    Point v3 = { p1.x - (int)nx, p1.y - (int)ny };
+
+    uint32_t color = pack_color(r, g, b);
+
+    // Draw as two triangles
+    draw_filled_triangle(v0, v1, v2, color);
+    draw_filled_triangle(v1, v2, v3, color);
+}
+
+void render_scene() {
+  clear_color(0, 0, 0);
+  // plot_line(100, 100, 300, 300, 10, 244, 10);
+  // plot_line(300, 500, 500, 500, 10, 244, 10);
+  // plot_line(550, 500, 700, 300, 10, 244, 10);
+  draw_thick_line((Point) { 250, 250 }, (Point) { 300, 300 }, 5, 10, 244, 10);
 }
 
 int main() {
-  // draw_gradient();        // Draw something
-  clear_color(0, 0, 0);
-  plot_line(100, 100, 300, 300, 10, 244, 10);
-  plot_line(300, 500, 500, 500, 10, 244, 10);
-  plot_line(550, 500, 700, 300, 10, 244, 10);
-  draw_variable_width_line(100, 100, 300, 200, 10.0f, 255, 0,
-                           0); // Red thick line
-  save_ppm("output.ppm");      // Save as PPM
-  printf("Saved output.ppm\n");
+  if (!SDL_Init(SDL_INIT_VIDEO)) {
+    SDL_Log("SDL could not initialize! SDL_Error: %s", SDL_GetError());
+    return -1;
+  }
+
+  SDL_Window *window =
+      SDL_CreateWindow("Software Renderer", WIDTH, HEIGHT, SDL_WINDOW_HIDDEN);
+  if (!window) {
+    SDL_Log("Window could not be created! SDL_Error: %s", SDL_GetError());
+    SDL_Quit();
+    return -1;
+  }
+
+  SDL_Surface *screenSurface = SDL_GetWindowSurface(window);
+  if (!screenSurface) {
+    SDL_Log("Could not get window surface! SDL_Error: %s", SDL_GetError());
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return -1;
+  }
+
+  SDL_Surface *framebufferSurface =
+      SDL_CreateSurface(WIDTH, HEIGHT, SDL_PIXELFORMAT_ARGB8888);
+
+  if (!framebufferSurface) {
+    SDL_Log("Could not create framebuffer surface! SDL_Error: %s",
+            SDL_GetError());
+    SDL_DestroyWindow(window);
+    SDL_Quit();
+    return -1;
+  }
+
+  if (!SDL_ShowWindow(window))
+    return -1;
+
+  int running = 1;
+  SDL_Event event;
+  while (running) {
+    // Indirect
+    SDL_WaitEvent(&event);
+    if (event.type == SDL_EVENT_QUIT) {
+      running = 0;
+    }
+
+    // Direct
+    // while (SDL_PollEvent(&event)) {
+    //   if (event.type == SDL_EVENT_QUIT) {
+    //     running = 0;
+    //   }
+    // }
+
+    render_scene(); // Draw to framebuffer
+
+    // Copy framebuffer data to SDL surface
+    memcpy(framebufferSurface->pixels, framebuffer,
+           WIDTH * HEIGHT * sizeof(uint32_t));
+    SDL_BlitSurface(framebufferSurface, NULL, screenSurface, NULL);
+    SDL_UpdateWindowSurface(window);
+  }
+
+  SDL_DestroySurface(framebufferSurface);
+  SDL_DestroyWindow(window);
+  SDL_Quit();
+
   return 0;
 }
