@@ -25,20 +25,6 @@ void clear_color(Surface *surface, uint8_t r, uint8_t g, uint8_t b) {
   printf("width: %d, height: %d\n", surface->width, surface->height);
 }
 
-// void fill_span(Surface *surface, int y, int x_start, int x_end, uint8_t r, uint8_t g, uint8_t b) {
-//   if (y < 0 || y >= surface->height)
-//     return; // Clipping
-//   if (x_start > x_end)
-//     swap(&x_start, &x_end);
-//
-//   if (x_end < 0 || x_start >= surface->width)
-//     return; // Clipping
-//
-//   for (int x = (x_start < 0 ? 0 : x_start); x <= (x_end >= surface->width ? surface->width - 1 : x_end); x++) {
-//     set_pixel(surface, x, y, r, g, b);
-//   }
-// }
-
 void plot_line(Surface *surface, int x0, int y0, int x1, int y1, int r, int g, int b) {
   int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
   int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;

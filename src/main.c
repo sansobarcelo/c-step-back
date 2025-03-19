@@ -13,7 +13,6 @@
 #define HEIGHT 400
 
 // Framebuffer (32-bit ARGB)
-Surface surface;
 Point mouse_pos;
 
 // Save framebuffer to a PPM file (convert `uint32_t` to RGB)
@@ -43,6 +42,8 @@ void save_ppm(const char *filename, Surface *surface) {
 
 void render_scene(Surface *surface) {
   clear_color(surface, 100, 30, 10);
+
+
   draw_thick_line(surface, (Point){250, 250}, (Point){mouse_pos.x, mouse_pos.y}, 15, 10, 244, 10);
 }
 
@@ -62,7 +63,7 @@ Surface create_surface(uint32_t width, uint32_t height) {
 }
 
 int main() {
-
+  Scene scene = scene_create();
   Surface surface = create_surface(WIDTH, HEIGHT);
 
   if (!SDL_Init(SDL_INIT_VIDEO)) {
