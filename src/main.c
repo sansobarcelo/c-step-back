@@ -1,3 +1,4 @@
+#include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_log.h"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_init.h>
@@ -7,13 +8,16 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "cglm/vec2.h"
 #include "graphics/renderer.h"
 
-#define WIDTH 600
-#define HEIGHT 400
+#define WIDTH 800
+#define HEIGHT 600
 
-// Framebuffer (32-bit ARGB)
-Point mouse_pos;
+typedef struct {
+  vec2 position;
+  double zoom;
+} Camera;
 
 // Save framebuffer to a PPM file (convert `uint32_t` to RGB)
 void save_ppm(const char *filename, Surface *surface) {
@@ -40,30 +44,68 @@ void save_ppm(const char *filename, Surface *surface) {
   fclose(f);
 }
 
-void render_scene(Surface *surface) {
+void render_scene(Camera *camera, Surface *surface) {
   clear_color(surface, 100, 30, 10);
+  vec2 p0 = {0, 0};
+  vec2 p1 = {100, 0};
 
+  glm_vec2_scale(p0, camera->zoom, p0);
+  glm_vec2_scale(p1, camera->zoom, p1);
 
-  draw_thick_line(surface, (Point){250, 250}, (Point){mouse_pos.x, mouse_pos.y}, 15, 10, 244, 10);
+  glm_vec2_sub(p0, camera->position, p0);
+  glm_vec2_sub(p1, camera->position, p1);
+
+  draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, 10, 244, 10);
 }
 
-void handle_input(SDL_Event *event) {
+void handle_input(SDL_Event *event, Camera *camera) {
   if (event->type == SDL_EVENT_MOUSE_MOTION) {
-    mouse_pos.x = event->motion.x;
-    mouse_pos.y = event->motion.y;
+    // mouse_pos.x = event->motion.x;
+    // mouse_pos.y = event->motion.y;
+  }
+
+
+  if (event->type == SDL_EVENT_KEY_DOWN) {
+    if (event->key.key == SDLK_UP) {
+      camera->position[1] -= 5;
+    }
+
+    if (event->key.key == SDLK_DOWN) {
+      camera->position[1] += 5;
+    }
+
+
+    if (event->key.key == SDLK_LEFT) {
+      camera->position[0] -= 5;
+    }
+
+    if (event->key.key == SDLK_RIGHT) {
+      camera->position[0] += 5;
+    }
+
+    if (event->key.key == SDLK_A) {
+      camera->zoom -= 0.01;
+    }
+
+    if (event->key.key == SDLK_S) {
+      camera->zoom += 0.01;
+    }
   }
 }
 
 Surface create_surface(uint32_t width, uint32_t height) {
-  return (Surface) {
-    .width = width,
-    .height = height,
-    .buffer = malloc(width * height * sizeof(uint32_t)),
+  return (Surface){
+      .width = width,
+      .height = height,
+      .buffer = malloc(width * height * sizeof(uint32_t)),
   };
 }
 
 int main() {
-  Scene scene = scene_create();
+  Camera camera = {
+      .position = {0, 0},
+      .zoom = 1.0,
+  };
   Surface surface = create_surface(WIDTH, HEIGHT);
 
   if (!SDL_Init(SDL_INIT_VIDEO)) {
@@ -106,7 +148,7 @@ int main() {
     if (event.type == SDL_EVENT_QUIT) {
       running = 0;
     }
-    handle_input(&event);
+    handle_input(&event, &camera);
 
     // Direct
     // while (SDL_PollEvent(&event)) {
@@ -115,7 +157,7 @@ int main() {
     //   }
     // }
 
-    render_scene(&surface); // Draw to framebuffer
+    render_scene(&camera, &surface); // Draw to framebuffer
 
     // Copy framebuffer data to SDL surface
     memcpy(framebufferSurface->pixels, surface.buffer, surface.width * surface.height * sizeof(uint32_t));

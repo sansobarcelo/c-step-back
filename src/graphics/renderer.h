@@ -1,6 +1,5 @@
 #pragma once
 
-#include "../stack.h"
 #include "../utils.h"
 #include <cglm/types.h>
 #include <stdint.h>
@@ -8,12 +7,6 @@
 typedef struct {
   vec2 translate;
 } Transform;
-
-STACK_DEFINE(Transform) // Define the stack for integers
-
-typedef struct {
-  Stack_Transform stack;
-} Scene;
 
 typedef struct {
   uint32_t width;
@@ -24,12 +17,6 @@ typedef struct {
 typedef struct {
   int x, y;
 } Point;
-
-Scene scene_create() {
-  Scene scene;
-  Stack_Transform_init(&scene.stack, 10);
-  return scene;
-}
 
 uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b);
 void set_pixel(Surface *surface, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b);

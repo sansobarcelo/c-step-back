@@ -1,7 +1,6 @@
 #include "renderer.h"
 #include <math.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b) {
@@ -16,13 +15,11 @@ void set_pixel(Surface *surface, uint32_t x, uint32_t y, uint8_t r, uint8_t g, u
 }
 
 void clear_color(Surface *surface, uint8_t r, uint8_t g, uint8_t b) {
-  printf("width: %d, height: %d\n", surface->width, surface->height);
   for (int y = 0; y < surface->height; y++) {
     for (int x = 0; x < surface->width; x++) {
       set_pixel(surface, x, y, r, g, b);
     }
   }
-  printf("width: %d, height: %d\n", surface->width, surface->height);
 }
 
 void plot_line(Surface *surface, int x0, int y0, int x1, int y1, int r, int g, int b) {
