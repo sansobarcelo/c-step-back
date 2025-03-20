@@ -141,9 +141,6 @@ void draw_filled_triangle(Surface *surface, Point p0, Point p1, Point p2, uint32
 }
 
 void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_t r, uint8_t g, uint8_t b) {
-
-  printf("P0: (%d, %d)\n", p0.x, p0.y);
-
   if (surface->width < 1)
     return;
 

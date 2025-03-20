@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "SDL3/SDL_timer.h"
 #include "camera.h"
 #include "graphics/renderer.h"
 
@@ -133,7 +134,14 @@ int main() {
 
   int running = 1;
   SDL_Event event;
+
+  const int FPS_CAP = 60;
+  const int FRAME_DELAY = 1000 / FPS_CAP; // 1000ms divided by 60 FPS = ~16.67ms per frame
+
+  uint32_t lastFrameTime = SDL_GetTicks(); // Track time of last frame
   while (running) {
+    uint32_t frameStart = SDL_GetTicks(); // Get current time at frame start
+
     // Indirect
     SDL_WaitEvent(&event);
     if (event.type == SDL_EVENT_QUIT) {
@@ -148,12 +156,23 @@ int main() {
     //   }
     // }
 
-    render_scene(&camera, &surface); // Draw to framebuffer
+    // Only render if enough time has passed for 60 FPS
+    if (SDL_GetTicks() - lastFrameTime >= FRAME_DELAY) {
+      lastFrameTime = SDL_GetTicks(); // Update last render time
 
-    // Copy framebuffer data to SDL surface
-    memcpy(framebufferSurface->pixels, surface.buffer, surface.width * surface.height * sizeof(uint32_t));
-    SDL_BlitSurface(framebufferSurface, NULL, screenSurface, NULL);
-    SDL_UpdateWindowSurface(window);
+      render_scene(&camera, &surface); // Draw to framebuffer
+
+      // Copy framebuffer data to SDL surface
+      memcpy(framebufferSurface->pixels, surface.buffer, surface.width * surface.height * sizeof(uint32_t));
+      SDL_BlitSurface(framebufferSurface, NULL, screenSurface, NULL);
+      SDL_UpdateWindowSurface(window);
+    }
+
+    // Frame delay to keep 60 FPS stable
+    uint32_t frameTime = SDL_GetTicks() - frameStart;
+    if (frameTime < FRAME_DELAY) {
+      SDL_Delay(FRAME_DELAY - frameTime); // Delay to match 60 FPS
+    }
   }
 
   SDL_DestroySurface(framebufferSurface);
