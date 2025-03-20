@@ -72,4 +72,12 @@ void world_to_screen(vec2 screen_pos, vec2 world_pos, Camera *camera, float scre
   // Convert to screen space
   screen_pos[0] = transformed[0] + screen_width / 2.0f;
   screen_pos[1] = screen_height / 2.0f - transformed[1]; // Flip Y (SDL top-left)
+
+  // Prevent precision errors causing wrap-around
+  if (screen_pos[0] < -screen_width || screen_pos[0] > 2 * screen_width) {
+    screen_pos[0] = -10000; // Move it off-screen
+  }
+  if (screen_pos[1] < -screen_height || screen_pos[1] > 2 * screen_height) {
+    screen_pos[1] = -10000; // Move it off-screen
+  }
 }

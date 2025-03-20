@@ -1,15 +1,15 @@
 #include "renderer.h"
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b) {
   return (255 << 24) | (r << 16) | (g << 8) | b; // 0xAARRGGBB
 }
 
-
 void set_pixel(Surface *surface, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b) {
-  if (x >= 0 && x < surface->width&& y >= 0 && y < surface->height) {
+  if (x >= 0 && x < surface->width && y >= 0 && y < surface->height) {
     surface->buffer[y * surface->width + x] = pack_color(r, g, b);
   }
 }
@@ -45,27 +45,64 @@ void plot_line(Surface *surface, int x0, int y0, int x1, int y1, int r, int g, i
 }
 
 void draw_span(Surface *surface, int y, int x0, int x1, uint32_t color) {
-  if (y < 0 || y >= surface->height || x0 >= surface->width || x1 < 0)
+  // Clip Y coordinate first
+  if (y < 0 || y >= surface->height)
     return;
 
+  // Ensure x0 <= x1
   if (x0 > x1) {
     int temp = x0;
     x0 = x1;
     x1 = temp;
-  } // Ensure x0 < x1
-  if (x0 < 0)
-    x0 = 0;
-  if (x1 >= surface->width)
-    x1 = surface->width - 1;
+  }
 
-  uint32_t *row = &surface->buffer[y * surface->width + x0];
-  for (int x = x0; x <= x1; x++) {
-    row[x - x0] = color;
+  // Fully out-of-bounds check (left and right)
+  if (x1 < 0 || x0 >= surface->width)
+    return;
+
+  // Clip X coordinates correctly
+  int start_x = (x0 < 0) ? 0 : x0;
+  int end_x = (x1 >= surface->width) ? surface->width - 1 : x1;
+
+  // Ensure valid span after clipping
+  if (start_x > end_x)
+    return;
+
+  // Get row pointer, ensuring we start at a valid memory location
+  uint32_t *row = &surface->buffer[y * surface->width + start_x];
+
+  // Draw the span
+  for (int x = start_x; x <= end_x; x++) {
+    row[x - start_x] = color;
   }
 }
 
+// void draw_span(Surface *surface, int y, int x0, int x1, uint32_t color) {
+//     // Clip Y coordinate
+//     if (y < 0 || y >= surface->height) return;
+//
+//     // Ensure x0 <= x1
+//     if (x0 > x1) {
+//         int temp = x0;
+//         x0 = x1;
+//         x1 = temp;
+//     }
+//
+//     // Clip X coordinates correctly
+//     if (x1 < 0 || x0 >= surface->width) return; // Entire span is out of bounds
+//
+//     if (x0 < 0) x0 = 0;
+//     if (x1 >= surface->width) x1 = surface->width - 1;
+//
+//     // Draw the span
+//     uint32_t *row = &surface->buffer[y * surface->width + x0];
+//     for (int x = x0; x <= x1; x++) {
+//         row[x - x0] = color;
+//     }
+// }
+
 void draw_filled_triangle(Surface *surface, Point p0, Point p1, Point p2, uint32_t color) {
-  // Sort points by y-coordinate
+  // Sort points by Y-coordinate (lowest to highest)
   if (p1.y < p0.y) {
     Point tmp = p0;
     p0 = p1;
@@ -82,28 +119,39 @@ void draw_filled_triangle(Surface *surface, Point p0, Point p1, Point p2, uint32
     p2 = tmp;
   }
 
-  float dx01 = (p1.y - p0.y) ? (float)(p1.x - p0.x) / (p1.y - p0.y) : 0;
-  float dx02 = (p2.y - p0.y) ? (float)(p2.x - p0.x) / (p2.y - p0.y) : 0;
-  float dx12 = (p2.y - p1.y) ? (float)(p2.x - p1.x) / (p2.y - p1.y) : 0;
+  // Compute X slopes (avoiding divide by zero)
+  float dx01 = (p1.y != p0.y) ? (float)(p1.x - p0.x) / (p1.y - p0.y) : 0;
+  float dx02 = (p2.y != p0.y) ? (float)(p2.x - p0.x) / (p2.y - p0.y) : 0;
+  float dx12 = (p2.y != p1.y) ? (float)(p2.x - p1.x) / (p2.y - p1.y) : 0;
 
+  // Left-Right ordering for better rasterization
   float xa = p0.x, xb = p0.x;
   for (int y = p0.y; y < p1.y; y++) {
-    draw_span(surface, y, (int)xa, (int)xb, color);
+    draw_span(surface, y, (int)roundf(xa), (int)roundf(xb), color);
     xa += dx01;
     xb += dx02;
   }
 
   xa = p1.x;
   for (int y = p1.y; y < p2.y; y++) {
-    draw_span(surface, y, (int)xa, (int)xb, color);
+    draw_span(surface, y, (int)roundf(xa), (int)roundf(xb), color);
     xa += dx12;
     xb += dx02;
   }
 }
 
 void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_t r, uint8_t g, uint8_t b) {
+
+  printf("P0: (%d, %d)\n", p0.x, p0.y);
+
   if (surface->width < 1)
     return;
+
+  // Clamp endpoints to screen boundaries
+  p0.x = (p0.x < 0) ? 0 : (p0.x >= surface->width ? surface->width - 1 : p0.x);
+  p0.y = (p0.y < 0) ? 0 : (p0.y >= surface->height ? surface->height - 1 : p0.y);
+  p1.x = (p1.x < 0) ? 0 : (p1.x >= surface->width ? surface->width - 1 : p1.x);
+  p1.y = (p1.y < 0) ? 0 : (p1.y >= surface->height ? surface->height - 1 : p1.y);
 
   // Compute direction vector
   float dx = p1.x - p0.x;
@@ -122,13 +170,14 @@ void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_
   ny *= half_w;
 
   // Compute rectangle corners
-  Point v0 = {p0.x + (int)nx, p0.y + (int)ny};
-  Point v1 = {p0.x - (int)nx, p0.y - (int)ny};
-  Point v2 = {p1.x + (int)nx, p1.y + (int)ny};
-  Point v3 = {p1.x - (int)nx, p1.y - (int)ny};
+  Point v0 = {roundf(p0.x + nx), roundf(p0.y + ny)};
+  Point v1 = {roundf(p0.x - nx), roundf(p0.y - ny)};
+  Point v2 = {roundf(p1.x + nx), roundf(p1.y + ny)};
+  Point v3 = {roundf(p1.x - nx), roundf(p1.y - ny)};
 
   uint32_t color = pack_color(r, g, b);
 
+  // Ensure correct triangle order
   draw_filled_triangle(surface, v0, v1, v2, color);
   draw_filled_triangle(surface, v1, v2, v3, color);
 }
