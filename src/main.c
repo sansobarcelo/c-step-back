@@ -3,21 +3,17 @@
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_init.h>
 #include <SDL3/SDL_surface.h>
+#include <cglm/vec2.h>
 
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "cglm/vec2.h"
+#include "camera.h"
 #include "graphics/renderer.h"
 
 #define WIDTH 800
 #define HEIGHT 600
-
-typedef struct {
-  vec2 position;
-  double zoom;
-} Camera;
 
 // Save framebuffer to a PPM file (convert `uint32_t` to RGB)
 void save_ppm(const char *filename, Surface *surface) {
@@ -46,14 +42,12 @@ void save_ppm(const char *filename, Surface *surface) {
 
 void render_scene(Camera *camera, Surface *surface) {
   clear_color(surface, 100, 30, 10);
+
+  // Object example
   vec2 p0 = {0, 0};
   vec2 p1 = {100, 0};
-
-  glm_vec2_scale(p0, camera->zoom, p0);
-  glm_vec2_scale(p1, camera->zoom, p1);
-
-  glm_vec2_sub(p0, camera->position, p0);
-  glm_vec2_sub(p1, camera->position, p1);
+  world_to_screen(p0, p0, camera, surface->width, surface->height);
+  world_to_screen(p1, p1, camera, surface->width, surface->height);
 
   draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, 10, 244, 10);
 }
@@ -64,16 +58,14 @@ void handle_input(SDL_Event *event, Camera *camera) {
     // mouse_pos.y = event->motion.y;
   }
 
-
   if (event->type == SDL_EVENT_KEY_DOWN) {
     if (event->key.key == SDLK_UP) {
-      camera->position[1] -= 5;
-    }
-
-    if (event->key.key == SDLK_DOWN) {
       camera->position[1] += 5;
     }
 
+    if (event->key.key == SDLK_DOWN) {
+      camera->position[1] -= 5;
+    }
 
     if (event->key.key == SDLK_LEFT) {
       camera->position[0] -= 5;
@@ -83,12 +75,11 @@ void handle_input(SDL_Event *event, Camera *camera) {
       camera->position[0] += 5;
     }
 
-    if (event->key.key == SDLK_A) {
-      camera->zoom -= 0.01;
-    }
-
-    if (event->key.key == SDLK_S) {
-      camera->zoom += 0.01;
+  } else if (event->type == SDL_EVENT_MOUSE_WHEEL) {
+    if (event->wheel.y > 0) {
+      camera->zoom += 1;
+    } else if (event->wheel.y < 0) {
+      camera->zoom -= 1;
     }
   }
 }
