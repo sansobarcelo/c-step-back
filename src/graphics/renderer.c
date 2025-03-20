@@ -147,12 +147,6 @@ void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_
   if (surface->width < 1)
     return;
 
-  // Clamp endpoints to screen boundaries
-  p0.x = (p0.x < 0) ? 0 : (p0.x >= surface->width ? surface->width - 1 : p0.x);
-  p0.y = (p0.y < 0) ? 0 : (p0.y >= surface->height ? surface->height - 1 : p0.y);
-  p1.x = (p1.x < 0) ? 0 : (p1.x >= surface->width ? surface->width - 1 : p1.x);
-  p1.y = (p1.y < 0) ? 0 : (p1.y >= surface->height ? surface->height - 1 : p1.y);
-
   // Compute direction vector
   float dx = p1.x - p0.x;
   float dy = p1.y - p0.y;
@@ -174,6 +168,19 @@ void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_
   Point v1 = {roundf(p0.x - nx), roundf(p0.y - ny)};
   Point v2 = {roundf(p1.x + nx), roundf(p1.y + ny)};
   Point v3 = {roundf(p1.x - nx), roundf(p1.y - ny)};
+
+  // Clamp corners **AFTER computing them**
+  v0.x = (v0.x < 0) ? 0 : (v0.x >= surface->width ? surface->width - 1 : v0.x);
+  v0.y = (v0.y < 0) ? 0 : (v0.y >= surface->height ? surface->height - 1 : v0.y);
+
+  v1.x = (v1.x < 0) ? 0 : (v1.x >= surface->width ? surface->width - 1 : v1.x);
+  v1.y = (v1.y < 0) ? 0 : (v1.y >= surface->height ? surface->height - 1 : v1.y);
+
+  v2.x = (v2.x < 0) ? 0 : (v2.x >= surface->width ? surface->width - 1 : v2.x);
+  v2.y = (v2.y < 0) ? 0 : (v2.y >= surface->height ? surface->height - 1 : v2.y);
+
+  v3.x = (v3.x < 0) ? 0 : (v3.x >= surface->width ? surface->width - 1 : v3.x);
+  v3.y = (v3.y < 0) ? 0 : (v3.y >= surface->height ? surface->height - 1 : v3.y);
 
   uint32_t color = pack_color(r, g, b);
 
