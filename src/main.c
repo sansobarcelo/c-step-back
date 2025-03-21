@@ -13,6 +13,9 @@
 #include "camera.h"
 #include "graphics/renderer.h"
 
+#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
+#include "cimgui.h"
+
 #define WIDTH 800
 #define HEIGHT 600
 

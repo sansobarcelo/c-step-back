@@ -9,9 +9,16 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 # cglm
 add_subdirectory(cglm EXCLUDE_FROM_ALL)
 
+# cimgui
+add_subdirectory(cimgui EXCLUDE_FROM_ALL)
+
 # Dfine vendor libr
 add_library(vendor INTERFACE)
 
 # Add to vendor target the following interfaces
-target_include_directories(vendor INTERFACE ./cglm/include/)
-target_link_libraries(vendor INTERFACE SDL3::SDL3)
+target_include_directories(vendor INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/cglm/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui
+)
+
+target_link_libraries(vendor INTERFACE SDL3::SDL3 cimgui)
