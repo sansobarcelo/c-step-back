@@ -1,3 +1,4 @@
+#include "SDL3/SDL_hints.h"
 #include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_log.h"
 #include <SDL3/SDL_events.h>
@@ -10,11 +11,17 @@
 #include <stdlib.h>
 
 #include "SDL3/SDL_timer.h"
+#include "SDL3/SDL_video.h"
 #include "camera.h"
 #include "graphics/renderer.h"
 
+
+#define CIMGUI_USE_OPENGL3
+#define CIMGUI_USE_SDL3
 #define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
 #include "cimgui.h"
+#include "cimgui_impl.h"
+#define igGetIO igGetIO_Nil
 
 #define WIDTH 800
 #define HEIGHT 600
@@ -108,13 +115,52 @@ int main() {
     return -1;
   }
 
-  SDL_Window *window = SDL_CreateWindow("Software Renderer", surface.width, surface.height, SDL_WINDOW_HIDDEN);
+  SDL_WindowFlags window_flags = SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL;
+  SDL_Window *window = SDL_CreateWindow("Software Renderer", surface.width, surface.height, window_flags);
   if (!window) {
     SDL_Log("Window could not be created! SDL_Error: %s", SDL_GetError());
     SDL_Quit();
     return -1;
   }
 
+  // OpenGL
+  // Decide GL+GLSL versions
+#if __APPLE__
+  // GL 3.2 Core + GLSL 150
+  const char *glsl_version = "#version 150";
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG); // Always required on Mac
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#else
+  // GL 3.0 + GLSL 130
+  const char *glsl_version = "#version 130";
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+
+  // and prepare OpenGL stuff
+  SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  // const SDL_DisplayMode current = SDL_GetCurrentDisplayMode(0);
+
+  SDL_GLContext gl_context = SDL_GL_CreateContext(window);
+  SDL_GL_MakeCurrent(window, gl_context);
+  SDL_GL_SetSwapInterval(1); // Enable vsync
+
+  // IMGUI
+  ImGuiContext *ctx = igCreateContext(NULL);
+  // set docking
+  ImGuiIO *ioptr = igGetIO();
+  ioptr->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+  ImGui_ImplSDL3_InitForOpenGL(window, ctx);
+  // end imgui nit
+
+  // BFORE OPENGL: Without openGL
   SDL_Surface *screenSurface = SDL_GetWindowSurface(window);
   if (!screenSurface) {
     SDL_Log("Could not get window surface! SDL_Error: %s", SDL_GetError());
