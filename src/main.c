@@ -3,6 +3,7 @@
 #include "SDL3/SDL_log.h"
 #include <SDL3/SDL_events.h>
 #include <SDL3/SDL_init.h>
+#include <SDL3/SDL_opengl.h>
 #include <SDL3/SDL_surface.h>
 #include <cglm/vec2.h>
 
@@ -10,11 +11,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "SDL3/SDL_opengl.h"
 #include "SDL3/SDL_timer.h"
 #include "SDL3/SDL_video.h"
 #include "camera.h"
 #include "graphics/renderer.h"
-
 
 #define CIMGUI_USE_OPENGL3
 #define CIMGUI_USE_SDL3
@@ -62,35 +63,36 @@ void render_scene(Camera *camera, Surface *surface) {
 
   draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, 10, 244, 10);
 }
+void handle_input(SDL_Event *event, Camera *camera, bool *running) {
+  while (SDL_PollEvent(event)) {
+    ImGui_ImplSDL3_ProcessEvent(event);
 
-void handle_input(SDL_Event *event, Camera *camera) {
-  if (event->type == SDL_EVENT_MOUSE_MOTION) {
-    // mouse_pos.x = event->motion.x;
-    // mouse_pos.y = event->motion.y;
-  }
-
-  if (event->type == SDL_EVENT_KEY_DOWN) {
-    if (event->key.key == SDLK_UP) {
-      camera->position[1] += 5;
+    if (event->type == SDL_EVENT_QUIT) {
+      *running = false;
     }
 
-    if (event->key.key == SDLK_DOWN) {
-      camera->position[1] -= 5;
+    if (event->type == SDL_EVENT_KEY_DOWN) {
+      switch (event->key.key) {
+      case SDLK_UP:
+        camera->position[1] += 5;
+        break;
+      case SDLK_DOWN:
+        camera->position[1] -= 5;
+        break;
+      case SDLK_LEFT:
+        camera->position[0] -= 5;
+        break;
+      case SDLK_RIGHT:
+        camera->position[0] += 5;
+        break;
+      }
     }
 
-    if (event->key.key == SDLK_LEFT) {
-      camera->position[0] -= 5;
-    }
-
-    if (event->key.key == SDLK_RIGHT) {
-      camera->position[0] += 5;
-    }
-
-  } else if (event->type == SDL_EVENT_MOUSE_WHEEL) {
-    if (event->wheel.y > 0) {
-      camera->zoom += 1;
-    } else if (event->wheel.y < 0) {
-      camera->zoom -= 1;
+    if (event->type == SDL_EVENT_MOUSE_WHEEL) {
+      if (event->wheel.y > 0)
+        camera->zoom += 1;
+      else if (event->wheel.y < 0)
+        camera->zoom -= 1;
     }
   }
 }
@@ -103,130 +105,110 @@ Surface create_surface(uint32_t width, uint32_t height) {
   };
 }
 
+void update_texture(GLuint texture, const Surface *surface) {
+  glBindTexture(GL_TEXTURE_2D, texture);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->width, surface->height, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
+}
+
+GLuint create_texture_from_surface(const Surface *surface) {
+  GLuint texture;
+  glGenTextures(1, &texture);
+  glBindTexture(GL_TEXTURE_2D, texture);
+
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Prevent blurring
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->width, surface->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
+  return texture;
+}
+
 int main() {
-  Camera camera = {
-      .position = {0, 0},
-      .zoom = 1.0,
-  };
-  Surface surface = create_surface(WIDTH, HEIGHT);
 
-  if (!SDL_Init(SDL_INIT_VIDEO)) {
-    SDL_Log("SDL could not initialize! SDL_Error: %s", SDL_GetError());
+  if (SDL_Init(SDL_INIT_VIDEO) == 0) {
+    SDL_Log("SDL_Init failed: %s", SDL_GetError());
     return -1;
   }
 
-  SDL_WindowFlags window_flags = SDL_WINDOW_HIDDEN | SDL_WINDOW_OPENGL;
-  SDL_Window *window = SDL_CreateWindow("Software Renderer", surface.width, surface.height, window_flags);
-  if (!window) {
-    SDL_Log("Window could not be created! SDL_Error: %s", SDL_GetError());
-    SDL_Quit();
-    return -1;
-  }
-
-  // OpenGL
-  // Decide GL+GLSL versions
-#if __APPLE__
-  // GL 3.2 Core + GLSL 150
-  const char *glsl_version = "#version 150";
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG); // Always required on Mac
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
   SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-#else
-  // GL 3.0 + GLSL 130
-  const char *glsl_version = "#version 130";
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
-#endif
-
-  // and prepare OpenGL stuff
-  SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
-  SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
-  SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
   SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-  // const SDL_DisplayMode current = SDL_GetCurrentDisplayMode(0);
 
+  SDL_Window *window = SDL_CreateWindow("Software Renderer + ImGui", WIDTH, HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
   SDL_GLContext gl_context = SDL_GL_CreateContext(window);
   SDL_GL_MakeCurrent(window, gl_context);
-  SDL_GL_SetSwapInterval(1); // Enable vsync
+  SDL_GL_SetSwapInterval(1); // vsync
 
-  // IMGUI
-  ImGuiContext *ctx = igCreateContext(NULL);
-  // set docking
-  ImGuiIO *ioptr = igGetIO();
-  ioptr->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-  ImGui_ImplSDL3_InitForOpenGL(window, ctx);
-  // end imgui nit
+  // Create surface
+  Surface surface = create_surface(WIDTH, HEIGHT);
+  GLuint cpu_texture = create_texture_from_surface(&surface);
 
-  // BFORE OPENGL: Without openGL
-  SDL_Surface *screenSurface = SDL_GetWindowSurface(window);
-  if (!screenSurface) {
-    SDL_Log("Could not get window surface! SDL_Error: %s", SDL_GetError());
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    return -1;
-  }
+  // Setup camera
+  Camera camera = {.position = {0, 0}, .zoom = 1.0f};
 
-  SDL_Surface *framebufferSurface = SDL_CreateSurface(surface.width, surface.height, SDL_PIXELFORMAT_ARGB8888);
+  // Setup ImGui
+  igCreateContext(NULL);
+  igStyleColorsDark(NULL);
+  ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
+  ImGui_ImplOpenGL3_Init("#version 330");
+  ImGuiIO *io = igGetIO();
+  io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-  if (!framebufferSurface) {
-    SDL_Log("Could not create framebuffer surface! SDL_Error: %s", SDL_GetError());
-    SDL_DestroyWindow(window);
-    SDL_Quit();
-    return -1;
-  }
-
-  if (!SDL_ShowWindow(window))
-    return -1;
-
-  int running = 1;
+  bool running = true;
   SDL_Event event;
 
-  const int FPS_CAP = 60;
-  const int FRAME_DELAY = 1000 / FPS_CAP; // 1000ms divided by 60 FPS = ~16.67ms per frame
-
-  uint32_t lastFrameTime = SDL_GetTicks(); // Track time of last frame
   while (running) {
-    uint32_t frameStart = SDL_GetTicks(); // Get current time at frame start
+    handle_input(&event, &camera, &running);
+    render_scene(&camera, &surface);
+    update_texture(cpu_texture, &surface);
 
-    // Indirect
-    SDL_WaitEvent(&event);
-    if (event.type == SDL_EVENT_QUIT) {
-      running = 0;
-    }
-    handle_input(&event, &camera);
+    // Start ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    igNewFrame();
 
-    // Direct
-    // while (SDL_PollEvent(&event)) {
-    //   if (event.type == SDL_EVENT_QUIT) {
-    //     running = 0;
-    //   }
-    // }
+    // Get screen size from ImGui
+    ImGuiViewport *viewport = igGetMainViewport();
+    igSetNextWindowPos(viewport->Pos, 0, (ImVec2){0, 0});
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
 
-    // Only render if enough time has passed for 60 FPS
-    if (SDL_GetTicks() - lastFrameTime >= FRAME_DELAY) {
-      lastFrameTime = SDL_GetTicks(); // Update last render time
+    // Background
+    igBegin("Background", NULL, flags);
+    igImage((ImTextureID)(intptr_t)cpu_texture, viewport->Size, (ImVec2){0, 1}, (ImVec2){1, 0});
 
-      render_scene(&camera, &surface); // Draw to framebuffer
+    // Floating overlay window example
+    igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
+    igSetNextWindowBgAlpha(0.6f); // Transparent background
 
-      // Copy framebuffer data to SDL surface
-      memcpy(framebufferSurface->pixels, surface.buffer, surface.width * surface.height * sizeof(uint32_t));
-      SDL_BlitSurface(framebufferSurface, NULL, screenSurface, NULL);
-      SDL_UpdateWindowSurface(window);
-    }
+    ImGuiWindowFlags overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
 
-    // Frame delay to keep 60 FPS stable
-    uint32_t frameTime = SDL_GetTicks() - frameStart;
-    if (frameTime < FRAME_DELAY) {
-      SDL_Delay(FRAME_DELAY - frameTime); // Delay to match 60 FPS
-    }
+    igBegin("Stats", NULL, overlay_flags);
+    igText("FPS: %.1f", 1.0f / io->DeltaTime);
+    igText("Zoom: %.2f", camera.zoom);
+    igText("Position: [%.1f, %.1f]", camera.position[0], camera.position[1]);
+    igEnd();
+
+    igEnd();
+
+    igRender();
+    glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);
+    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
+    SDL_GL_SwapWindow(window);
   }
 
-  SDL_DestroySurface(framebufferSurface);
+  // Cleanup
+  ImGui_ImplOpenGL3_Shutdown();
+  ImGui_ImplSDL3_Shutdown();
+  igDestroyContext(NULL);
+  glDeleteTextures(1, &cpu_texture);
+  // destroy_surface(&surface);
+  // SDL_GL_DeleteContext(gl_context);
   SDL_DestroyWindow(window);
   SDL_Quit();
-
   return 0;
 }
