@@ -1,4 +1,3 @@
-#include "SDL3/SDL_hints.h"
 #include "SDL3/SDL_keycode.h"
 #include "SDL3/SDL_log.h"
 #include <SDL3/SDL_events.h>
@@ -7,12 +6,12 @@
 #include <SDL3/SDL_surface.h>
 #include <cglm/vec2.h>
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 #include "SDL3/SDL_opengl.h"
-#include "SDL3/SDL_timer.h"
 #include "SDL3/SDL_video.h"
 #include "camera.h"
 #include "graphics/renderer.h"
@@ -27,30 +26,16 @@
 #define WIDTH 800
 #define HEIGHT 600
 
-// Save framebuffer to a PPM file (convert `uint32_t` to RGB)
-void save_ppm(const char *filename, Surface *surface) {
-  FILE *f;
-  f = fopen(filename, "wb");
-  if (!f) {
-    perror("Failed to open file");
-    return;
-  }
+typedef struct {
+  bool resized;
+  bool running;
 
-  // Write PPM header
-  fprintf(f, "P6\n%d %d\n255\n", WIDTH, HEIGHT);
+  uint32_t width;
+  uint32_t height;
 
-  // Write pixel data (convert 32-bit ARGB to 24-bit RGB)
-  for (int i = 0; i < WIDTH * HEIGHT; i++) {
-    uint32_t color = surface->buffer[i];
-    uint8_t rgb[3] = {
-        (color >> 16) & 0xFF, // Extract Red
-        (color >> 8) & 0xFF,  // Extract Green
-        (color) & 0xFF        // Extract Blue
-    };
-    fwrite(rgb, 1, 3, f);
-  }
-  fclose(f);
-}
+  Surface surface;
+  GLuint texture;
+} AppState;
 
 void render_scene(Camera *camera, Surface *surface) {
   clear_color(surface, 100, 30, 10);
@@ -63,12 +48,13 @@ void render_scene(Camera *camera, Surface *surface) {
 
   draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, 10, 244, 10);
 }
-void handle_input(SDL_Event *event, Camera *camera, bool *running) {
+
+void handle_input(SDL_Event *event, Camera *camera, AppState *app_state) {
   while (SDL_PollEvent(event)) {
     ImGui_ImplSDL3_ProcessEvent(event);
 
     if (event->type == SDL_EVENT_QUIT) {
-      *running = false;
+      app_state->running = false;
     }
 
     if (event->type == SDL_EVENT_KEY_DOWN) {
@@ -93,6 +79,12 @@ void handle_input(SDL_Event *event, Camera *camera, bool *running) {
         camera->zoom += 1;
       else if (event->wheel.y < 0)
         camera->zoom -= 1;
+    }
+
+    if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+      app_state->resized = true;
+      // app_state->width = event->window.data1;
+      // app_state->height = event->windw.data2;
     }
   }
 }
@@ -122,6 +114,51 @@ GLuint create_texture_from_surface(const Surface *surface) {
   return texture;
 }
 
+void handle_resize(AppState *app_state) {
+  // Free old
+  free(app_state->surface.buffer);
+  glDeleteTextures(1, &app_state->texture);
+
+  app_state->surface = create_surface(app_state->width, app_state->height);
+  app_state->texture = create_texture_from_surface(&app_state->surface);
+
+  app_state->resized = false;
+}
+
+void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
+  // Start ImGui frame
+  ImGui_ImplOpenGL3_NewFrame();
+  ImGui_ImplSDL3_NewFrame();
+  igNewFrame();
+
+  // Get screen size from ImGui
+  ImGuiViewport *viewport = igGetMainViewport();
+  igSetNextWindowPos(viewport->Pos, 0, (ImVec2){0, 0});
+  ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
+
+  // Background
+  igBegin("Background", NULL, flags);
+  igImage((ImTextureID)(intptr_t)app_state->texture, viewport->Size, (ImVec2){0, 1}, (ImVec2){1, 0});
+
+  // Floating overlay window example
+  igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
+  igSetNextWindowBgAlpha(0.6f); // Transparent background
+
+  ImGuiWindowFlags overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+                                   ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+
+  igBegin("Stats", NULL, overlay_flags);
+  igText("FPS: %.1f", 1.0f / io->DeltaTime);
+  igText("Zoom: %.2f", camera->zoom);
+  igText("Position: [%.1f, %.1f]", camera->position[0], camera->position[1]);
+  igEnd();
+
+  igEnd();
+
+  igRender();
+}
+
 int main() {
 
   if (SDL_Init(SDL_INIT_VIDEO) == 0) {
@@ -139,13 +176,6 @@ int main() {
   SDL_GL_MakeCurrent(window, gl_context);
   SDL_GL_SetSwapInterval(1); // vsync
 
-  // Create surface
-  Surface surface = create_surface(WIDTH, HEIGHT);
-  GLuint cpu_texture = create_texture_from_surface(&surface);
-
-  // Setup camera
-  Camera camera = {.position = {0, 0}, .zoom = 1.0f};
-
   // Setup ImGui
   igCreateContext(NULL);
   igStyleColorsDark(NULL);
@@ -154,45 +184,30 @@ int main() {
   ImGuiIO *io = igGetIO();
   io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-  bool running = true;
+  // Setup camera
+  Camera camera = {.position = {0, 0}, .zoom = 1.0f};
+  // Create surface for the custom renderer
+  AppState app_state = {.resized = false, .running = true, .width = WIDTH, .height = HEIGHT};
+  app_state.surface = create_surface(WIDTH, HEIGHT);
+  app_state.texture = create_texture_from_surface(&app_state.surface);
+
   SDL_Event event;
+  while (app_state.running) {
+    handle_input(&event, &camera, &app_state);
 
-  while (running) {
-    handle_input(&event, &camera, &running);
-    render_scene(&camera, &surface);
-    update_texture(cpu_texture, &surface);
+    if (app_state.resized) {
+      printf("Resized: %d, %d\n", app_state.width, app_state.height);
+      handle_resize(&app_state);
+    }
 
-    // Start ImGui frame
-    ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    igNewFrame();
+    // Custom renderer
+    render_scene(&camera, &app_state.surface);
+    update_texture(app_state.texture, &app_state.surface);
 
-    // Get screen size from ImGui
-    ImGuiViewport *viewport = igGetMainViewport();
-    igSetNextWindowPos(viewport->Pos, 0, (ImVec2){0, 0});
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                             ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
+    // Render ui
+    imgui_render(&app_state, &camera, io);
 
-    // Background
-    igBegin("Background", NULL, flags);
-    igImage((ImTextureID)(intptr_t)cpu_texture, viewport->Size, (ImVec2){0, 1}, (ImVec2){1, 0});
-
-    // Floating overlay window example
-    igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
-    igSetNextWindowBgAlpha(0.6f); // Transparent background
-
-    ImGuiWindowFlags overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-                                     ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
-
-    igBegin("Stats", NULL, overlay_flags);
-    igText("FPS: %.1f", 1.0f / io->DeltaTime);
-    igText("Zoom: %.2f", camera.zoom);
-    igText("Position: [%.1f, %.1f]", camera.position[0], camera.position[1]);
-    igEnd();
-
-    igEnd();
-
-    igRender();
+    // Opengl render rules
     glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
@@ -205,10 +220,10 @@ int main() {
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   igDestroyContext(NULL);
-  glDeleteTextures(1, &cpu_texture);
-  // destroy_surface(&surface);
-  // SDL_GL_DeleteContext(gl_context);
+  glDeleteTextures(1, &app_state.texture);
+  free(app_state.surface.buffer);
   SDL_DestroyWindow(window);
   SDL_Quit();
+  printf("End\n");
   return 0;
 }

@@ -13,8 +13,6 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 add_subdirectory(cglm EXCLUDE_FROM_ALL)
 
 # cimgui
-set(CIMGUI_USE_SDL3 ON CACHE BOOL "" FORCE)
-set(CIMGUI_USE_OPENGL3 ON CACHE BOOL "" FORCE)
 add_subdirectory(cimgui)
 
 # cimgui backends wrapper
