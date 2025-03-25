@@ -12,21 +12,36 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 # cglm
 add_subdirectory(cglm EXCLUDE_FROM_ALL)
 
-# cimgui
-add_subdirectory(cimgui)
-
 # cimgui backends wrapper
-add_library(cimgui_with_backends STATIC)
-target_sources(cimgui_with_backends PRIVATE
+add_library(cimgui_with_backends SHARED
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/cimgui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/cimgui_impl.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/imgui.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/imgui_draw.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/imgui_demo.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/imgui_widgets.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/imgui_tables.cpp
+
+    # custom backend
     ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/backends/imgui_impl_sdl3.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/cimgui/imgui/backends/imgui_impl_opengl3.cpp
+
 )
-target_include_directories(cimgui_with_backends PUBLIC
-    ./cimgui
+target_include_directories(cimgui_with_backends PUBLIC ./cimgui)
+target_include_directories(cimgui_with_backends PRIVATE
     ./cimgui/imgui
+    ./cimgui/imgui/backends
 )
+
+# Very important...
+if (WIN32)
+    target_compile_definitions(cimgui_with_backends PUBLIC "-DIMGUI_IMPL_API=extern \"C\" __declspec\(dllexport\)")
+else(WIN32)
+    target_compile_definitions(cimgui_with_backends PUBLIC "-DIMGUI_IMPL_API=extern \"C\" ")
+endif(WIN32)
+
+target_compile_features(cimgui_with_backends PRIVATE cxx_std_11)
 target_link_libraries(cimgui_with_backends PUBLIC
-    cimgui
     SDL3::SDL3
     OpenGL::GL
 )
