@@ -1,9 +1,7 @@
 add_executable(main)
 
-find_package(OpenGL REQUIRED)
-
 target_sources(main PRIVATE main.c camera.c graphics/renderer.c) #app.c renderer/custom.c utils/vector.c)
-target_link_libraries(main PRIVATE vendor OpenGL::GL)
+target_link_libraries(main PRIVATE vendor)
 
 if(NOT WIN32)
     target_link_libraries(main PRIVATE m)
