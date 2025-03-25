@@ -35,5 +35,4 @@ target_link_libraries(cimgui_with_backends PUBLIC
 
 # Define vendor
 add_library(vendor INTERFACE)
-
-target_link_libraries(vendor INTERFACE OpenGL::GL SDL3::SDL3 cimgui_with_backends cglm)
+target_link_libraries(vendor INTERFACE cimgui_with_backends cglm)
