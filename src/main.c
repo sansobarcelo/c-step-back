@@ -76,15 +76,19 @@ void handle_input(SDL_Event *event, Camera *camera, AppState *app_state) {
 
     if (event->type == SDL_EVENT_MOUSE_WHEEL) {
       if (event->wheel.y > 0)
-        camera->zoom += 1;
+        camera->zoom += 0.05;
       else if (event->wheel.y < 0)
-        camera->zoom -= 1;
+        camera->zoom -= 0.05;
+      // TODO: For the moment here...
+      if (camera->zoom <= 0.0) {
+        camera->zoom = 0.05;
+      }
     }
 
     if (event->type == SDL_EVENT_WINDOW_RESIZED) {
       app_state->resized = true;
-      // app_state->width = event->window.data1;
-      // app_state->height = event->windw.data2;
+      app_state->width = event->window.data1;
+      app_state->height = event->window.data2;
     }
   }
 }
@@ -134,12 +138,18 @@ void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
   // Get screen size from ImGui
   ImGuiViewport *viewport = igGetMainViewport();
   igSetNextWindowPos(viewport->Pos, 0, (ImVec2){0, 0});
+
+  igSetNextWindowPos((ImVec2){0, 0}, 0, (ImVec2){0, 0});
+  igSetNextWindowSize((ImVec2){(float)app_state->width, (float)app_state->height}, 0);
+
+  igImage((ImTextureID)(intptr_t)app_state->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
+
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
 
   // Background
   igBegin("Background", NULL, flags);
-  igImage((ImTextureID)(intptr_t)app_state->texture, viewport->Size, (ImVec2){0, 1}, (ImVec2){1, 0});
+  igImage((ImTextureID)(intptr_t)app_state->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
 
   // Floating overlay window example
   igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
@@ -186,6 +196,7 @@ int main() {
 
   // Setup camera
   Camera camera = {.position = {0, 0}, .zoom = 1.0f};
+
   // Create surface for the custom renderer
   AppState app_state = {.resized = false, .running = true, .width = WIDTH, .height = HEIGHT};
   app_state.surface = create_surface(WIDTH, HEIGHT);
@@ -198,6 +209,7 @@ int main() {
     if (app_state.resized) {
       printf("Resized: %d, %d\n", app_state.width, app_state.height);
       handle_resize(&app_state);
+      io->DisplaySize = (ImVec2){(float)app_state.width / io->DisplayFramebufferScale.x, (float)app_state.height / io->DisplayFramebufferScale.y};
     }
 
     // Custom renderer
@@ -207,7 +219,7 @@ int main() {
     // Render ui
     imgui_render(&app_state, &camera, io);
 
-    // Opengl render rules
+    // Opengl render
     glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);
     glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
