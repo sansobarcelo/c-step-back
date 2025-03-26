@@ -13,8 +13,8 @@
 
 #include "SDL3/SDL_opengl.h"
 #include "SDL3/SDL_video.h"
-#include "camera.h"
-#include "graphics/renderer.h"
+#include "graphics/drawer.h"
+#include "renderer.h"
 
 #define CIMGUI_USE_OPENGL3
 #define CIMGUI_USE_SDL3
@@ -29,26 +29,129 @@
 typedef struct {
   bool resized;
   bool running;
-
   uint32_t width;
   uint32_t height;
-
-  Surface surface;
-  GLuint texture;
 } AppState;
 
-void render_scene(Camera *camera, Surface *surface) {
-  clear_color(surface, 100, 30, 10);
+typedef struct {
+  bool dragging;
+  int last_x, last_y;
+} CameraControlState;
 
-  // Object example
-  vec2 p0 = {0, 0};
-  vec2 p1 = {100, 0};
-  world_to_screen(p0, p0, camera, surface->width, surface->height);
-  world_to_screen(p1, p1, camera, surface->width, surface->height);
-  draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, 10, 244, 10);
+void camera_handle_drag(Camera *camera, CameraControlState *state, int mouse_x, int mouse_y, bool mouse_down) {
+  if (mouse_down) {
+    if (!state->dragging) {
+      state->dragging = true;
+      state->last_x = mouse_x;
+      state->last_y = mouse_y;
+      return;
+    }
+
+    int dx = mouse_x - state->last_x;
+    int dy = mouse_y - state->last_y;
+
+    // Move camera opposite to mouse direction (screen to world)
+    camera->position[0] -= dx / camera->zoom;
+    camera->position[1] += dy / camera->zoom; // Y is flipped in SDL
+
+    state->last_x = mouse_x;
+    state->last_y = mouse_y;
+  } else {
+    state->dragging = false;
+  }
 }
 
-void handle_input(SDL_Event *event, Camera *camera, AppState *app_state) {
+void camera_handle_zoom(Camera *camera, float zoom_factor, int mouse_x, int mouse_y, float screen_width, float screen_height) {
+  // Convert mouse position to world coordinates before zoom
+  vec2 world_before;
+  world_before[0] = (mouse_x - screen_width / 2.0f) / camera->zoom + camera->position[0];
+  world_before[1] = (screen_height / 2.0f - mouse_y) / camera->zoom + camera->position[1];
+
+  camera->zoom *= zoom_factor;
+
+  // Clamp zoom (optional)
+  if (camera->zoom < 0.1f)
+    camera->zoom = 0.1f;
+  if (camera->zoom > 10.0f)
+    camera->zoom = 10.0f;
+
+  // Convert mouse position to world coordinates after zoom
+  vec2 world_after;
+  world_after[0] = (mouse_x - screen_width / 2.0f) / camera->zoom + camera->position[0];
+  world_after[1] = (screen_height / 2.0f - mouse_y) / camera->zoom + camera->position[1];
+
+  // Adjust camera position so world point under cursor stays the same
+  camera->position[0] += world_before[0] - world_after[0];
+  camera->position[1] += world_before[1] - world_after[1];
+}
+
+// void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_control, AppState *app_state) {
+//   switch (event->type) {
+//   case SDL_EVENT_MOUSE_MOTION: {
+//     int mx = event->motion.x;
+//     int my = event->motion.y;
+//
+//     // SDL_BUTTON_MIDDLE is still used in SDL3
+//     uint32_t buttons = SDL_GetMouseState(NULL, NULL);
+//     bool dragging = (buttons & SDL_BUTTON_MIDDLE) != 0;
+//
+//     if (dragging) {
+//       if (!camera_control->dragging) {
+//         camera_control->dragging = true;
+//         camera_control->last_x = mx;
+//         camera_control->last_y = my;
+//         break;
+//       }
+//
+//       int dx = mx - camera_control->last_x;
+//       int dy = my - camera_control->last_y;
+//
+//       camera->position[0] -= dx / camera->zoom;
+//       camera->position[1] += dy / camera->zoom; // SDL Y-axis is top-down
+//
+//       camera_control->last_x = mx;
+//       camera_control->last_y = my;
+//     } else {
+//       camera_control->dragging = false;
+//     }
+//     break;
+//   }
+//
+//   case SDL_EVENT_MOUSE_WHEEL: {
+//     float mx, my;
+//     SDL_GetMouseState(&mx, &my);
+//
+//     float zoom_factor = (event->wheel.y > 0) ? 1.1f : 0.9f;
+//
+//     // Convert mouse position to world coordinates before zoom
+//     float screen_width = app_state->width;
+//     float screen_height = app_state->height;
+//
+//     vec2 world_before = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
+//                          (screen_height / 2.0f - my) / camera->zoom + camera->position[1]};
+//
+//     camera->zoom *= zoom_factor;
+//
+//     if (camera->zoom < 0.1f)
+//       camera->zoom = 0.1f;
+//     if (camera->zoom > 10.0f)
+//       camera->zoom = 10.0f;
+//
+//     vec2 world_after = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
+//                         (screen_height / 2.0f - my) / camera->zoom + camera->position[1]};
+//
+//     camera->position[0] += world_before[0] - world_after[0];
+//     camera->position[1] += world_before[1] - world_after[1];
+//
+//     break;
+//   }
+//
+//   default:
+//     break;
+//   }
+// }
+
+void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_control, AppState *app_state) {
   while (SDL_PollEvent(event)) {
     ImGui_ImplSDL3_ProcessEvent(event);
 
@@ -58,19 +161,85 @@ void handle_input(SDL_Event *event, Camera *camera, AppState *app_state) {
 
     if (event->type == SDL_EVENT_KEY_DOWN) {
       switch (event->key.key) {
-      case SDLK_UP:
+      case SDLK_W:
         camera->position[1] += 5;
         break;
-      case SDLK_DOWN:
+      case SDLK_S:
         camera->position[1] -= 5;
         break;
-      case SDLK_LEFT:
+      case SDLK_A:
         camera->position[0] -= 5;
         break;
-      case SDLK_RIGHT:
+      case SDLK_D:
         camera->position[0] += 5;
         break;
       }
+    }
+
+    switch (event->type) {
+    case SDL_EVENT_MOUSE_MOTION: {
+      int mx = event->motion.x;
+      int my = event->motion.y;
+
+      // SDL_BUTTON_MIDDLE is still used in SDL3
+      uint32_t buttons = SDL_GetMouseState(NULL, NULL);
+      bool dragging = (buttons & SDL_BUTTON_MIDDLE) != 0;
+
+      if (dragging) {
+        if (!camera_control->dragging) {
+          camera_control->dragging = true;
+          camera_control->last_x = mx;
+          camera_control->last_y = my;
+          break;
+        }
+
+        int dx = mx - camera_control->last_x;
+        int dy = my - camera_control->last_y;
+
+        camera->position[0] -= dx / camera->zoom;
+        camera->position[1] -= dy / camera->zoom;
+
+        camera_control->last_x = mx;
+        camera_control->last_y = my;
+      } else {
+        camera_control->dragging = false;
+      }
+      break;
+    }
+
+    case SDL_EVENT_MOUSE_WHEEL: {
+      float mx, my;
+      SDL_GetMouseState(&mx, &my);
+
+      float zoom_factor = (event->wheel.y > 0) ? 1.1f : 0.9f;
+
+      float screen_width = app_state->width;
+      float screen_height = app_state->height;
+
+      // Convert mouse position to world coordinates BEFORE zoom
+      vec2 world_before = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
+                           (my - screen_height / 2.0f) / -camera->zoom + camera->position[1]};
+
+      // Apply zoom
+      camera->zoom *= zoom_factor;
+      if (camera->zoom < 0.1f)
+        camera->zoom = 0.1f;
+      if (camera->zoom > 10.0f)
+        camera->zoom = 10.0f;
+
+      // Convert mouse position to world coordinates AFTER zoom
+      vec2 world_after = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
+                          (my - screen_height / 2.0f) / -camera->zoom + camera->position[1]};
+
+      // Adjust camera position to keep world point under cursor stable
+      camera->position[0] += world_before[0] - world_after[0];
+      camera->position[1] += world_before[1] - world_after[1];
+
+      break;
+    }
+
+    default:
+      break;
     }
 
     if (event->type == SDL_EVENT_MOUSE_WHEEL) {
@@ -92,50 +261,12 @@ void handle_input(SDL_Event *event, Camera *camera, AppState *app_state) {
   }
 }
 
-Surface create_surface(uint32_t width, uint32_t height) {
-  return (Surface){
-      .width = width,
-      .height = height,
-      .buffer = malloc(width * height * sizeof(uint32_t)),
-  };
-}
-
-void update_texture(GLuint texture, const Surface *surface) {
-  glBindTexture(GL_TEXTURE_2D, texture);
-
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->width, surface->height, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
-}
-
-GLuint create_texture_from_surface(const Surface *surface) {
-  GLuint texture;
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
-
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Prevent blurring
-  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA, surface->width, surface->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
-  return texture;
-}
-
-void handle_resize(AppState *app_state) {
-  // Free old
-  free(app_state->surface.buffer);
-  glDeleteTextures(1, &app_state->texture);
-
-  app_state->surface = create_surface(app_state->width, app_state->height);
-  app_state->texture = create_texture_from_surface(&app_state->surface);
-
-  app_state->resized = false;
-}
-
-void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
+void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, Camera *camera, ImGuiIO *io) {
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   igNewFrame();
 
   ImGuiViewport *viewport = igGetMainViewport();
-
 
   igSetNextWindowPos((ImVec2){0, 0}, 0, (ImVec2){0, 0});
   igSetNextWindowSize((ImVec2){(float)app_state->width, (float)app_state->height}, 0);
@@ -146,7 +277,7 @@ void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
   igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding, (ImVec2){0, 0});
   igPushStyleVar_Float(ImGuiStyleVar_WindowBorderSize, 0.0f);
   igBegin("Background", NULL, flags);
-  igImage((ImTextureID)(intptr_t)app_state->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
+  igImage((ImTextureID)(intptr_t)renderer->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
   igEnd();
   igPopStyleVar(2);
 
@@ -164,48 +295,7 @@ void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
   igRender();
 }
 
-// void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
-//   // Start ImGui frame
-//   ImGui_ImplOpenGL3_NewFrame();
-//   ImGui_ImplSDL3_NewFrame();
-//   igNewFrame();
-//
-//   // Get screen size from ImGui
-//   ImGuiViewport *viewport = igGetMainViewport();
-//   igSetNextWindowPos(viewport->Pos, 0, (ImVec2){0, 0});
-//   igSetNextWindowPos((ImVec2){0, 0}, 0, (ImVec2){0, 0});
-//   igSetNextWindowSize((ImVec2){(float)app_state->width, (float)app_state->height}, 0);
-//
-//   printf("Viewport: %f, %f\n", viewport->Size.x, viewport->Size.y);
-//   printf("Viewport pos: %f, %f\n", viewport->Pos.x, viewport->Pos.y);
-//
-//   ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-//                            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
-//
-//   // Background
-//   igBegin("Background", NULL, flags);
-//   igImage((ImTextureID)(intptr_t)app_state->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
-//
-//   // Floating overlay window example
-//   igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
-//   igSetNextWindowBgAlpha(0.6f); // Transparent background
-//
-//   ImGuiWindowFlags overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-//                                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
-//
-//   igBegin("Stats", NULL, overlay_flags);
-//   igText("FPS: %.1f", 1.0f / io->DeltaTime);
-//   igText("Zoom: %.2f", camera->zoom);
-//   igText("Position: [%.1f, %.1f]", camera->position[0], camera->position[1]);
-//   igEnd();
-//
-//   igEnd();
-//
-//   igRender();
-// }
-
 int main() {
-
   if (SDL_Init(SDL_INIT_VIDEO) == 0) {
     SDL_Log("SDL_Init failed: %s", SDL_GetError());
     return -1;
@@ -231,30 +321,28 @@ int main() {
   ImGuiIO *io = igGetIO();
   io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-  // Setup camera
+  // Setup app
   Camera camera = {.position = {0, 0}, .zoom = 1.0f};
-
-  // Create surface for the custom renderer
+  CameraControlState control = {0};
   AppState app_state = {.resized = false, .running = true, .width = WIDTH, .height = HEIGHT};
-  app_state.surface = create_surface(WIDTH, HEIGHT);
-  app_state.texture = create_texture_from_surface(&app_state.surface);
+  SoftwareOpenGlRenderer renderer = renderer_create(10, 10);
 
   SDL_Event event;
   while (app_state.running) {
-    handle_input(&event, &camera, &app_state);
+    handle_input(&event, &camera, &control, &app_state);
 
     if (app_state.resized) {
       printf("Resized: %d, %d\n", app_state.width, app_state.height);
-      handle_resize(&app_state);
+      renderer_handle_resize(&renderer, app_state.width, app_state.height);
+      app_state.resized = false;
       io->DisplaySize = (ImVec2){(float)app_state.width / io->DisplayFramebufferScale.x, (float)app_state.height / io->DisplayFramebufferScale.y};
     }
 
     // Custom renderer
-    render_scene(&camera, &app_state.surface);
-    update_texture(app_state.texture, &app_state.surface);
+    renderer_render(&renderer, &camera);
 
     // Render ui
-    imgui_render(&app_state, &camera, io);
+    imgui_render(&app_state, &renderer, &camera, io);
 
     // Opengl render
     glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);
@@ -269,8 +357,7 @@ int main() {
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   igDestroyContext(NULL);
-  glDeleteTextures(1, &app_state.texture);
-  free(app_state.surface.buffer);
+  renderer_free(&renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
   printf("End\n");

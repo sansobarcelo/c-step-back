@@ -1,4 +1,4 @@
-#include "renderer.h"
+#include "drawer.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -75,30 +75,6 @@ void draw_span(Surface *surface, int y, int x0, int x1, uint32_t color) {
     row[x - start_x] = color;
   }
 }
-
-// void draw_span(Surface *surface, int y, int x0, int x1, uint32_t color) {
-//     // Clip Y coordinate
-//     if (y < 0 || y >= surface->height) return;
-//
-//     // Ensure x0 <= x1
-//     if (x0 > x1) {
-//         int temp = x0;
-//         x0 = x1;
-//         x1 = temp;
-//     }
-//
-//     // Clip X coordinates correctly
-//     if (x1 < 0 || x0 >= surface->width) return; // Entire span is out of bounds
-//
-//     if (x0 < 0) x0 = 0;
-//     if (x1 >= surface->width) x1 = surface->width - 1;
-//
-//     // Draw the span
-//     uint32_t *row = &surface->buffer[y * surface->width + x0];
-//     for (int x = x0; x <= x1; x++) {
-//         row[x - x0] = color;
-//     }
-// }
 
 void draw_filled_triangle(Surface *surface, Point p0, Point p1, Point p2, uint32_t color) {
   // Sort points by Y-coordinate (lowest to highest)

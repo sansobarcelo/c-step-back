@@ -26,3 +26,4 @@ void plot_line(Surface *surface, int x0, int y0, int x1, int y1, int r, int g, i
 void draw_span(Surface *surface, int y, int x0, int x1, uint32_t color);
 void draw_filled_triangle(Surface *surface, Point p0, Point p1, Point p2, uint32_t color);
 void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_t r, uint8_t g, uint8_t b);
+
