@@ -33,12 +33,19 @@ target_include_directories(cimgui_with_backends PRIVATE
     ./cimgui/imgui/backends
 )
 
-# Very important...
+# Platform dependencies
+# imgui api has: IMGUI_IMPL_API
+# so here we define this to extern "C" __...
 if (WIN32)
     target_compile_definitions(cimgui_with_backends PUBLIC "-DIMGUI_IMPL_API=extern \"C\" __declspec\(dllexport\)")
 else(WIN32)
     target_compile_definitions(cimgui_with_backends PUBLIC "-DIMGUI_IMPL_API=extern \"C\" ")
 endif(WIN32)
+
+# On unix stdcpp needed for the cimgui build
+if (UNIX)
+    target_link_libraries(cimgui_with_backends PRIVATE stdc++)
+endif (UNIX)
 
 target_compile_features(cimgui_with_backends PRIVATE cxx_std_11)
 target_link_libraries(cimgui_with_backends PUBLIC
