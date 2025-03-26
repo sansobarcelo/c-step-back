@@ -45,7 +45,6 @@ void render_scene(Camera *camera, Surface *surface) {
   vec2 p1 = {100, 0};
   world_to_screen(p0, p0, camera, surface->width, surface->height);
   world_to_screen(p1, p1, camera, surface->width, surface->height);
-
   draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, 10, 244, 10);
 }
 
@@ -103,6 +102,7 @@ Surface create_surface(uint32_t width, uint32_t height) {
 
 void update_texture(GLuint texture, const Surface *surface) {
   glBindTexture(GL_TEXTURE_2D, texture);
+
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->width, surface->height, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
 }
 
@@ -114,7 +114,7 @@ GLuint create_texture_from_surface(const Surface *surface) {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // Prevent blurring
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
-  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, surface->width, surface->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_BGRA, surface->width, surface->height, 0, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
   return texture;
 }
 
@@ -130,44 +130,79 @@ void handle_resize(AppState *app_state) {
 }
 
 void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
-  // Start ImGui frame
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   igNewFrame();
 
-  // Get screen size from ImGui
   ImGuiViewport *viewport = igGetMainViewport();
-  igSetNextWindowPos(viewport->Pos, 0, (ImVec2){0, 0});
+
 
   igSetNextWindowPos((ImVec2){0, 0}, 0, (ImVec2){0, 0});
   igSetNextWindowSize((ImVec2){(float)app_state->width, (float)app_state->height}, 0);
-
-  igImage((ImTextureID)(intptr_t)app_state->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
-
   ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
                            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
 
-  // Background
+  // Fullscreen background image
+  igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding, (ImVec2){0, 0});
+  igPushStyleVar_Float(ImGuiStyleVar_WindowBorderSize, 0.0f);
   igBegin("Background", NULL, flags);
   igImage((ImTextureID)(intptr_t)app_state->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
+  igEnd();
+  igPopStyleVar(2);
 
-  // Floating overlay window example
+  // Overlay stats
   igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
-  igSetNextWindowBgAlpha(0.6f); // Transparent background
-
+  igSetNextWindowBgAlpha(0.6f);
   ImGuiWindowFlags overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
                                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
-
   igBegin("Stats", NULL, overlay_flags);
   igText("FPS: %.1f", 1.0f / io->DeltaTime);
   igText("Zoom: %.2f", camera->zoom);
   igText("Position: [%.1f, %.1f]", camera->position[0], camera->position[1]);
   igEnd();
 
-  igEnd();
-
   igRender();
 }
+
+// void imgui_render(AppState *app_state, Camera *camera, ImGuiIO *io) {
+//   // Start ImGui frame
+//   ImGui_ImplOpenGL3_NewFrame();
+//   ImGui_ImplSDL3_NewFrame();
+//   igNewFrame();
+//
+//   // Get screen size from ImGui
+//   ImGuiViewport *viewport = igGetMainViewport();
+//   igSetNextWindowPos(viewport->Pos, 0, (ImVec2){0, 0});
+//   igSetNextWindowPos((ImVec2){0, 0}, 0, (ImVec2){0, 0});
+//   igSetNextWindowSize((ImVec2){(float)app_state->width, (float)app_state->height}, 0);
+//
+//   printf("Viewport: %f, %f\n", viewport->Size.x, viewport->Size.y);
+//   printf("Viewport pos: %f, %f\n", viewport->Pos.x, viewport->Pos.y);
+//
+//   ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+//                            ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
+//
+//   // Background
+//   igBegin("Background", NULL, flags);
+//   igImage((ImTextureID)(intptr_t)app_state->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
+//
+//   // Floating overlay window example
+//   igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
+//   igSetNextWindowBgAlpha(0.6f); // Transparent background
+//
+//   ImGuiWindowFlags overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
+//                                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
+//
+//   igBegin("Stats", NULL, overlay_flags);
+//   igText("FPS: %.1f", 1.0f / io->DeltaTime);
+//   igText("Zoom: %.2f", camera->zoom);
+//   igText("Position: [%.1f, %.1f]", camera->position[0], camera->position[1]);
+//   igEnd();
+//
+//   igEnd();
+//
+//   igRender();
+// }
 
 int main() {
 
@@ -189,6 +224,8 @@ int main() {
   // Setup ImGui
   igCreateContext(NULL);
   igStyleColorsDark(NULL);
+  // igGetStyle()->WindowPadding = (ImVec2){0, 0};
+
   ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
   ImGui_ImplOpenGL3_Init("#version 330");
   ImGuiIO *io = igGetIO();
