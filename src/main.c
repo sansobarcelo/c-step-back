@@ -206,35 +206,28 @@ void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_c
       }
       break;
     }
-
     case SDL_EVENT_MOUSE_WHEEL: {
       float mx, my;
       SDL_GetMouseState(&mx, &my);
 
-      float zoom_factor = (event->wheel.y > 0) ? 1.1f : 0.9f;
-
       float screen_width = app_state->width;
       float screen_height = app_state->height;
 
-      // Convert mouse position to world coordinates BEFORE zoom
-      vec2 world_before = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
-                           (my - screen_height / 2.0f) / -camera->zoom + camera->position[1]};
+      float zoom_factor = SDL_powf(1.1f, event->wheel.y);
 
-      // Apply zoom
+      vec2 world_before, world_after;
+      screen_to_world(world_before, mx, my, camera, screen_width, screen_height);
+
       camera->zoom *= zoom_factor;
-      if (camera->zoom < 0.1f)
-        camera->zoom = 0.1f;
-      if (camera->zoom > 10.0f)
-        camera->zoom = 10.0f;
+      if (camera->zoom < 0.05f)
+        camera->zoom = 0.05f;
+      if (camera->zoom > 100.0f)
+        camera->zoom = 100.0f;
 
-      // Convert mouse position to world coordinates AFTER zoom
-      vec2 world_after = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
-                          (my - screen_height / 2.0f) / -camera->zoom + camera->position[1]};
+      screen_to_world(world_after, mx, my, camera, screen_width, screen_height);
 
-      // Adjust camera position to keep world point under cursor stable
       camera->position[0] += world_before[0] - world_after[0];
       camera->position[1] += world_before[1] - world_after[1];
-
       break;
     }
 

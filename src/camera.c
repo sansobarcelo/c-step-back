@@ -1,6 +1,11 @@
 #include "camera.h"
 #include "cglm/mat3.h"
 
+void screen_to_world(vec2 out_world, float screen_x, float screen_y, const Camera *camera, float screen_width, float screen_height) {
+  out_world[0] = (screen_x - screen_width / 2.0f) / camera->zoom + camera->position[0];
+  out_world[1] = (screen_height / 2.0f - screen_y) / camera->zoom + camera->position[1];
+}
+
 Bounds camera_visible_bounds(const Camera *camera, uint32_t screen_width, uint32_t screen_height) {
   float half_width = (float)screen_width / (2.0f * camera->zoom);
   float half_height = (float)screen_height / (2.0f * camera->zoom);
