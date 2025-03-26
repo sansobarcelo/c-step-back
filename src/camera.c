@@ -1,6 +1,18 @@
 #include "camera.h"
 #include "cglm/mat3.h"
 
+Bounds camera_visible_bounds(const Camera *camera, uint32_t screen_width, uint32_t screen_height) {
+  float half_width = (float)screen_width / (2.0f * camera->zoom);
+  float half_height = (float)screen_height / (2.0f * camera->zoom);
+
+  return (Bounds){
+      .left = camera->position[0] - half_width,
+      .right = camera->position[0] + half_width,
+      .bottom = camera->position[1] - half_height,
+      .top = camera->position[1] + half_height,
+  };
+}
+
 void compute_view_matrix(mat3 view, Camera *camera) {
 
   glm_mat3_identity(view);
