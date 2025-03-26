@@ -3,31 +3,41 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-uint32_t pack_color(uint8_t r, uint8_t g, uint8_t b) {
-  return (255 << 24) | (r << 16) | (g << 8) | b; // 0xAARRGGBB
+uint32_t pack_color(ColorF color) {
+  uint8_t ri = (uint8_t)(color.r * 255.0f);
+  uint8_t gi = (uint8_t)(color.g * 255.0f);
+  uint8_t bi = (uint8_t)(color.b * 255.0f);
+  uint8_t a = 255; // fully opaque
+
+  return (a << 24) | (ri << 16) | (gi << 8) | bi;
 }
 
-void set_pixel(Surface *surface, uint32_t x, uint32_t y, uint8_t r, uint8_t g, uint8_t b) {
+// uint32_t pack_color(Color color) {
+//   return (255 << 24) | (color.r << 16) | (color.g << 8) | color.b; // 0xAARRGGBB
+// }
+
+void set_pixel(Surface *surface, uint32_t x, uint32_t y, uint32_t color) {
   if (x >= 0 && x < surface->width && y >= 0 && y < surface->height) {
-    surface->buffer[y * surface->width + x] = pack_color(r, g, b);
+    surface->buffer[y * surface->width + x] = color;
   }
 }
 
-void clear_color(Surface *surface, uint8_t r, uint8_t g, uint8_t b) {
+void clear_color(Surface *surface, ColorF color) {
+  uint32_t color_packed = pack_color(color);
   for (int y = 0; y < surface->height; y++) {
     for (int x = 0; x < surface->width; x++) {
-      set_pixel(surface, x, y, r, g, b);
+      set_pixel(surface, x, y, color_packed);
     }
   }
 }
 
-void plot_line(Surface *surface, int x0, int y0, int x1, int y1, int r, int g, int b) {
+void plot_line(Surface *surface, int x0, int y0, int x1, int y1, ColorF color) {
   int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
   int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
   int err = dx + dy, e2;
-
+  uint32_t color_packed = pack_color(color);
   while (1) {
-    set_pixel(surface, x0, y0, r, g, b);
+    set_pixel(surface, x0, y0, color_packed);
     if (x0 == x1 && y0 == y1)
       break; // Exit condition
 
@@ -115,7 +125,7 @@ void draw_filled_triangle(Surface *surface, Point p0, Point p1, Point p2, uint32
   }
 }
 
-void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_t r, uint8_t g, uint8_t b) {
+void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, ColorF color) {
   if (surface->width < 1)
     return;
 
@@ -154,9 +164,9 @@ void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, uint8_
   v3.x = (v3.x < 0) ? 0 : (v3.x >= surface->width ? surface->width - 1 : v3.x);
   v3.y = (v3.y < 0) ? 0 : (v3.y >= surface->height ? surface->height - 1 : v3.y);
 
-  uint32_t color = pack_color(r, g, b);
+  uint32_t color_packed = pack_color(color);
 
   // Ensure correct triangle order
-  draw_filled_triangle(surface, v0, v1, v2, color);
-  draw_filled_triangle(surface, v1, v2, v3, color);
+  draw_filled_triangle(surface, v0, v1, v2, color_packed);
+  draw_filled_triangle(surface, v1, v2, v3, color_packed);
 }

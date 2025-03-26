@@ -31,6 +31,8 @@ typedef struct {
   bool running;
   uint32_t width;
   uint32_t height;
+
+  float bg_color[4];
 } AppState;
 
 typedef struct {
@@ -216,7 +218,10 @@ void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_c
       float zoom_factor = SDL_powf(1.1f, event->wheel.y);
 
       vec2 world_before, world_after;
+
       screen_to_world(world_before, mx, my, camera, screen_width, screen_height);
+      printf("Screen: %f, %f\n", mx, my);
+      printf("World: %f, %f\n", world_before[0], world_before[1]);
 
       camera->zoom *= zoom_factor;
       if (camera->zoom < 0.05f)
@@ -285,6 +290,12 @@ void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, Camera 
   igText("Position: [%.1f, %.1f]", camera->position[0], camera->position[1]);
   igEnd();
 
+  // BG color picker
+  igBegin("Color Picker Example", NULL, 0);
+  igText("Pick a color:");
+  igColorEdit4("Color", app_state->bg_color, ImGuiColorEditFlags_None);
+  igEnd();
+
   igRender();
 }
 
@@ -317,7 +328,7 @@ int main() {
   // Setup app
   Camera camera = {.position = {0, 0}, .zoom = 1.0f};
   CameraControlState control = {0};
-  AppState app_state = {.resized = false, .running = true, .width = WIDTH, .height = HEIGHT};
+  AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT};
   SoftwareOpenGlRenderer renderer = renderer_create(10, 10);
 
   SDL_Event event;
@@ -332,7 +343,13 @@ int main() {
     }
 
     // Custom renderer
-    renderer_render(&renderer, &camera);
+    ColorF bg_color = {
+      .r = app_state.bg_color[0],
+      .g = app_state.bg_color[1],
+      .b = app_state.bg_color[2],
+      .a = app_state.bg_color[3],
+    };
+    renderer_render(&renderer, bg_color, &camera);
 
     // Render ui
     imgui_render(&app_state, &renderer, &camera, io);
