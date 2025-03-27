@@ -11,6 +11,9 @@ add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
 # cglm
 add_subdirectory(cglm EXCLUDE_FROM_ALL)
+if (MSVC)
+  target_link_libraries(cglm PRIVATE ucrt)
+endif()
 
 # cimgui backends wrapper
 add_library(cimgui_with_backends SHARED
