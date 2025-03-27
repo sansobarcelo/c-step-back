@@ -31,8 +31,6 @@ typedef struct {
   bool running;
   uint32_t width;
   uint32_t height;
-
-  float bg_color[4];
 } AppState;
 
 typedef struct {
@@ -293,7 +291,18 @@ void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, Camera 
   // BG color picker
   igBegin("Color Picker Example", NULL, 0);
   igText("Pick a color:");
-  igColorEdit4("Color", app_state->bg_color, ImGuiColorEditFlags_None);
+
+  // TODO: Create state
+  static float bg_color[4] = {0};
+  if (igColorEdit4("Color", bg_color, ImGuiColorEditFlags_None)) {
+    ColorF bg_colorf = {
+        .r = bg_color[0],
+        .g = bg_color[1],
+        .b = bg_color[2],
+        .a = bg_color[3],
+    };
+    renderer_set_clear_color(renderer, bg_colorf);
+  }
   igEnd();
 
   igRender();
@@ -331,6 +340,9 @@ int main() {
   AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT};
   SoftwareOpenGlRenderer renderer = renderer_create(10, 10);
 
+  // Start bg_color
+  renderer_set_clear_color(&renderer, (ColorF){0});
+
   SDL_Event event;
   while (app_state.running) {
     handle_input(&event, &camera, &control, &app_state);
@@ -343,13 +355,7 @@ int main() {
     }
 
     // Custom renderer
-    ColorF bg_color = {
-      .r = app_state.bg_color[0],
-      .g = app_state.bg_color[1],
-      .b = app_state.bg_color[2],
-      .a = app_state.bg_color[3],
-    };
-    renderer_render(&renderer, bg_color, &camera);
+    renderer_render(&renderer, &camera);
 
     // Render ui
     imgui_render(&app_state, &renderer, &camera, io);

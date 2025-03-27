@@ -1,7 +1,14 @@
 #include "drawer.h"
 #include <math.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+
+static uint32_t *clear_buffer;
+static uint32_t clear_width = 0;
+static uint32_t clear_height = 0;
+static ColorF clear_colorf;
 
 uint32_t pack_color(ColorF color) {
   uint8_t ri = (uint8_t)(color.r * 255.0f);
@@ -12,23 +19,41 @@ uint32_t pack_color(ColorF color) {
   return (a << 24) | (ri << 16) | (gi << 8) | bi;
 }
 
-// uint32_t pack_color(Color color) {
-//   return (255 << 24) | (color.r << 16) | (color.g << 8) | color.b; // 0xAARRGGBB
-// }
-
 void set_pixel(Surface *surface, uint32_t x, uint32_t y, uint32_t color) {
   if (x >= 0 && x < surface->width && y >= 0 && y < surface->height) {
     surface->buffer[y * surface->width + x] = color;
   }
 }
 
-void clear_color(Surface *surface, ColorF color) {
+void set_clear_color(Surface *surface, ColorF color) {
+  if (clear_buffer && (surface->width != clear_width || surface->height != clear_height)) {
+    free(clear_buffer);
+    clear_buffer = (void *)0; // Set pointer to null
+  }
+
+  if (!clear_buffer) {
+    clear_buffer = malloc(sizeof(uint32_t) * surface->width * surface->height);
+    clear_width = surface->width;
+    clear_height = surface->height;
+  }
+
+  // generate the buffer
+  printf("Recreating clear color buffer\n");
+  clear_colorf = color;
   uint32_t color_packed = pack_color(color);
   for (int y = 0; y < surface->height; y++) {
     for (int x = 0; x < surface->width; x++) {
-      set_pixel(surface, x, y, color_packed);
+      clear_buffer[y * surface->width + x] = color_packed;
     }
   }
+}
+
+void clear_surface(Surface *surface) {
+  // If size change update clear buffer with the prev color
+  if (surface->width != clear_width || surface->height != clear_height) {
+    set_clear_color(surface, clear_colorf);
+  }
+  memcpy(surface->buffer, clear_buffer, sizeof(uint32_t) * surface->width * surface->height);
 }
 
 void plot_line(Surface *surface, int x0, int y0, int x1, int y1, ColorF color) {

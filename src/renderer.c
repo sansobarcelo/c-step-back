@@ -2,6 +2,7 @@
 #include "SDL3/SDL_opengl.h"
 #include "graphics/drawer.h"
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 // Private
@@ -32,10 +33,10 @@ GLuint create_texture_from_surface(const Surface *surface) {
 // End Private
 
 // Public implementations
-void renderer_render(SoftwareOpenGlRenderer *renderer, ColorF bg_color, Camera *camera) {
+void renderer_render(SoftwareOpenGlRenderer *renderer, Camera *camera) {
   Surface *surface = &renderer->surface;
 
-  clear_color(surface, bg_color);
+  clear_surface(surface);
 
   // Object example
   vec2 p0 = {0, 0};
@@ -69,4 +70,8 @@ void renderer_handle_resize(SoftwareOpenGlRenderer *renderer, uint32_t new_width
 
   renderer->surface = create_surface(new_width, new_height);
   renderer->texture = create_texture_from_surface(&renderer->surface);
+}
+
+void renderer_set_clear_color(SoftwareOpenGlRenderer *renderer, ColorF color) {
+  set_clear_color(&renderer->surface, color);
 }
