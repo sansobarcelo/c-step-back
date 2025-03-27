@@ -322,7 +322,7 @@ int main() {
   SDL_Window *window = SDL_CreateWindow("Software Renderer + ImGui", WIDTH, HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
   SDL_GLContext gl_context = SDL_GL_CreateContext(window);
   SDL_GL_MakeCurrent(window, gl_context);
-  SDL_GL_SetSwapInterval(1); // vsync
+  SDL_GL_SetSwapInterval(0); // vsync
 
   // Setup ImGui
   igCreateContext(NULL);

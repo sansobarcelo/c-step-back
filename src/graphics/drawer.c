@@ -20,7 +20,7 @@ uint32_t pack_color(ColorF color) {
 }
 
 void set_pixel(Surface *surface, uint32_t x, uint32_t y, uint32_t color) {
-  if (x >= 0 && x < surface->width && y >= 0 && y < surface->height) {
+if (x < surface->width && y < surface->height) {
     surface->buffer[y * surface->width + x] = color;
   }
 }
@@ -102,12 +102,12 @@ void draw_span(Surface *surface, int y, int x0, int x1, uint32_t color) {
   if (start_x > end_x)
     return;
 
-  // Get row pointer, ensuring we start at a valid memory location
+  // Optimized drawing using pointer arithmetic
   uint32_t *row = &surface->buffer[y * surface->width + start_x];
+  int count = end_x - start_x + 1;
 
-  // Draw the span
-  for (int x = start_x; x <= end_x; x++) {
-    row[x - start_x] = color;
+  while (count--) {
+    *row++ = color;
   }
 }
 
