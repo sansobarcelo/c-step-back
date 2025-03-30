@@ -1,18 +1,17 @@
-#include "SDL3/SDL_keycode.h"
-#include "SDL3/SDL_log.h"
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_init.h>
-#include <SDL3/SDL_opengl.h>
-#include <SDL3/SDL_surface.h>
-#include <cglm/vec2.h>
-
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include "SDL3/SDL_opengl.h"
-#include "SDL3/SDL_video.h"
+#include <SDL3/SDL_events.h>
+#include <SDL3/SDL_init.h>
+#include <SDL3/SDL_keycode.h>
+#include <SDL3/SDL_log.h>
+#include <SDL3/SDL_opengl.h>
+#include <SDL3/SDL_surface.h>
+#include <SDL3/SDL_video.h>
+#include <cglm/vec2.h>
+
 #include "graphics/drawer.h"
 #include "renderer.h"
 
@@ -36,9 +35,37 @@ typedef struct {
 typedef struct {
   bool dragging;
   int last_x, last_y;
-} CameraControlState;
+} InputState;
 
-void camera_handle_drag(Camera *camera, CameraControlState *state, int mouse_x, int mouse_y, bool mouse_down) {
+// void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
+//   if (mouse_down) {
+//     if (!state->dragging) {
+//       state->dragging = true;
+//       state->last_x = mouse_x;
+//       state->last_y = mouse_y;
+//       return;
+//     }
+//
+//     // Calculate the mouse movement (change in screen space)
+//     int dx = mouse_x - state->last_x;
+//     int dy = mouse_y - state->last_y;
+//
+//     // Adjust the movement by zoom factor: divide by zoom to move correctly in world space
+//     float zoom_factor = canvas->width / (float)WIDTH; // or use canvas->zoom if available
+//
+//     // Apply movement to the canvas transform (invert the direction)
+//     canvas->transform[2][0] += dx / zoom_factor; // Adjust transform matrix for X
+//     canvas->transform[2][1] += dy / zoom_factor; // Adjust transform matrix for Y
+//
+//     // Update the last mouse position for the next frame
+//     state->last_x = mouse_x;
+//     state->last_y = mouse_y;
+//   } else {
+//     state->dragging = false;
+//   }
+// }
+
+void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
   if (mouse_down) {
     if (!state->dragging) {
       state->dragging = true;
@@ -50,9 +77,11 @@ void camera_handle_drag(Camera *camera, CameraControlState *state, int mouse_x, 
     int dx = mouse_x - state->last_x;
     int dy = mouse_y - state->last_y;
 
-    // Move camera opposite to mouse direction (screen to world)
-    camera->position[0] -= dx / camera->zoom;
-    camera->position[1] += dy / camera->zoom; // Y is flipped in SDL
+    // Invert y axis:
+    dy = -dy;
+
+    // Use canvas_translate instead of doing it manually
+    canvas_translate(canvas, -dx / canvas->scale, dy / canvas->scale);
 
     state->last_x = mouse_x;
     state->last_y = mouse_y;
@@ -61,97 +90,23 @@ void camera_handle_drag(Camera *camera, CameraControlState *state, int mouse_x, 
   }
 }
 
-void camera_handle_zoom(Camera *camera, float zoom_factor, int mouse_x, int mouse_y, float screen_width, float screen_height) {
-  // Convert mouse position to world coordinates before zoom
-  vec2 world_before;
-  world_before[0] = (mouse_x - screen_width / 2.0f) / camera->zoom + camera->position[0];
-  world_before[1] = (screen_height / 2.0f - mouse_y) / camera->zoom + camera->position[1];
+void canvas_handle_zoom(Canvas *canvas, float zoom_factor, int mouse_x, int mouse_y, float screen_width, float screen_height) {
+  // Get world position under the mouse before zoom
+  vec2 world_before = {(mouse_x - screen_width / 2.0f) / canvas->scale + canvas->translation[0],
+                       (screen_height / 2.0f - mouse_y) / canvas->scale + canvas->translation[1]};
 
-  camera->zoom *= zoom_factor;
+  // Update zoom via helper
+  canvas_scale(canvas, canvas->scale * zoom_factor);
 
-  // Clamp zoom (optional)
-  if (camera->zoom < 0.1f)
-    camera->zoom = 0.1f;
-  if (camera->zoom > 10.0f)
-    camera->zoom = 10.0f;
+  // Get world position after zoom
+  vec2 world_after = {(mouse_x - screen_width / 2.0f) / canvas->scale + canvas->translation[0],
+                      (screen_height / 2.0f - mouse_y) / canvas->scale + canvas->translation[1]};
 
-  // Convert mouse position to world coordinates after zoom
-  vec2 world_after;
-  world_after[0] = (mouse_x - screen_width / 2.0f) / camera->zoom + camera->position[0];
-  world_after[1] = (screen_height / 2.0f - mouse_y) / camera->zoom + camera->position[1];
-
-  // Adjust camera position so world point under cursor stays the same
-  camera->position[0] += world_before[0] - world_after[0];
-  camera->position[1] += world_before[1] - world_after[1];
+  // Adjust translation to keep the point under the cursor fixed
+  canvas_translate(canvas, world_before[0] - world_after[0], world_before[1] - world_after[1]);
 }
 
-// void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_control, AppState *app_state) {
-//   switch (event->type) {
-//   case SDL_EVENT_MOUSE_MOTION: {
-//     int mx = event->motion.x;
-//     int my = event->motion.y;
-//
-//     // SDL_BUTTON_MIDDLE is still used in SDL3
-//     uint32_t buttons = SDL_GetMouseState(NULL, NULL);
-//     bool dragging = (buttons & SDL_BUTTON_MIDDLE) != 0;
-//
-//     if (dragging) {
-//       if (!camera_control->dragging) {
-//         camera_control->dragging = true;
-//         camera_control->last_x = mx;
-//         camera_control->last_y = my;
-//         break;
-//       }
-//
-//       int dx = mx - camera_control->last_x;
-//       int dy = my - camera_control->last_y;
-//
-//       camera->position[0] -= dx / camera->zoom;
-//       camera->position[1] += dy / camera->zoom; // SDL Y-axis is top-down
-//
-//       camera_control->last_x = mx;
-//       camera_control->last_y = my;
-//     } else {
-//       camera_control->dragging = false;
-//     }
-//     break;
-//   }
-//
-//   case SDL_EVENT_MOUSE_WHEEL: {
-//     float mx, my;
-//     SDL_GetMouseState(&mx, &my);
-//
-//     float zoom_factor = (event->wheel.y > 0) ? 1.1f : 0.9f;
-//
-//     // Convert mouse position to world coordinates before zoom
-//     float screen_width = app_state->width;
-//     float screen_height = app_state->height;
-//
-//     vec2 world_before = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
-//                          (screen_height / 2.0f - my) / camera->zoom + camera->position[1]};
-//
-//     camera->zoom *= zoom_factor;
-//
-//     if (camera->zoom < 0.1f)
-//       camera->zoom = 0.1f;
-//     if (camera->zoom > 10.0f)
-//       camera->zoom = 10.0f;
-//
-//     vec2 world_after = {(mx - screen_width / 2.0f) / camera->zoom + camera->position[0],
-//                         (screen_height / 2.0f - my) / camera->zoom + camera->position[1]};
-//
-//     camera->position[0] += world_before[0] - world_after[0];
-//     camera->position[1] += world_before[1] - world_after[1];
-//
-//     break;
-//   }
-//
-//   default:
-//     break;
-//   }
-// }
-
-void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_control, AppState *app_state) {
+void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, AppState *app_state) {
   while (SDL_PollEvent(event)) {
     ImGui_ImplSDL3_ProcessEvent(event);
 
@@ -162,16 +117,16 @@ void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_c
     if (event->type == SDL_EVENT_KEY_DOWN) {
       switch (event->key.key) {
       case SDLK_W:
-        camera->position[1] += 5;
+        canvas->transform[2][1] += 5; // Move canvas up
         break;
       case SDLK_S:
-        camera->position[1] -= 5;
+        canvas->transform[2][1] -= 5; // Move canvas down
         break;
       case SDLK_A:
-        camera->position[0] -= 5;
+        canvas->transform[2][0] -= 5; // Move canvas left
         break;
       case SDLK_D:
-        camera->position[0] += 5;
+        canvas->transform[2][0] += 5; // Move canvas right
         break;
       }
     }
@@ -181,28 +136,23 @@ void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_c
       int mx = event->motion.x;
       int my = event->motion.y;
 
-      // SDL_BUTTON_MIDDLE is still used in SDL3
       uint32_t buttons = SDL_GetMouseState(NULL, NULL);
       bool dragging = (buttons & SDL_BUTTON_MIDDLE) != 0;
 
       if (dragging) {
-        if (!camera_control->dragging) {
-          camera_control->dragging = true;
-          camera_control->last_x = mx;
-          camera_control->last_y = my;
+        if (!input_state->dragging) {
+          input_state->dragging = true;
+          input_state->last_x = mx;
+          input_state->last_y = my;
           break;
         }
 
-        int dx = mx - camera_control->last_x;
-        int dy = my - camera_control->last_y;
+        canvas_handle_drag(canvas, input_state, mx, my, true);
 
-        camera->position[0] -= dx / camera->zoom;
-        camera->position[1] -= dy / camera->zoom;
-
-        camera_control->last_x = mx;
-        camera_control->last_y = my;
+        input_state->last_x = mx;
+        input_state->last_y = my;
       } else {
-        camera_control->dragging = false;
+        input_state->dragging = false;
       }
       break;
     }
@@ -212,41 +162,14 @@ void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_c
 
       float screen_width = app_state->width;
       float screen_height = app_state->height;
-
       float zoom_factor = SDL_powf(1.1f, event->wheel.y);
 
-      vec2 world_before, world_after;
-
-      screen_to_world(world_before, mx, my, camera, screen_width, screen_height);
-      printf("Screen: %f, %f\n", mx, my);
-      printf("World: %f, %f\n", world_before[0], world_before[1]);
-
-      camera->zoom *= zoom_factor;
-      if (camera->zoom < 0.05f)
-        camera->zoom = 0.05f;
-      if (camera->zoom > 100.0f)
-        camera->zoom = 100.0f;
-
-      screen_to_world(world_after, mx, my, camera, screen_width, screen_height);
-
-      camera->position[0] += world_before[0] - world_after[0];
-      camera->position[1] += world_before[1] - world_after[1];
+      canvas_handle_zoom(canvas, zoom_factor, mx, my, screen_width, screen_height);
       break;
     }
 
     default:
       break;
-    }
-
-    if (event->type == SDL_EVENT_MOUSE_WHEEL) {
-      if (event->wheel.y > 0)
-        camera->zoom += 0.05;
-      else if (event->wheel.y < 0)
-        camera->zoom -= 0.05;
-      // TODO: For the moment here...
-      if (camera->zoom <= 0.0) {
-        camera->zoom = 0.05;
-      }
     }
 
     if (event->type == SDL_EVENT_WINDOW_RESIZED) {
@@ -257,7 +180,8 @@ void handle_input(SDL_Event *event, Camera *camera, CameraControlState *camera_c
   }
 }
 
-void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, Camera *camera, ImGuiIO *io) {
+void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, ImGuiIO *io) {
+  Canvas *canvas = &renderer->draw_context.canvas;
   ImGui_ImplOpenGL3_NewFrame();
   ImGui_ImplSDL3_NewFrame();
   igNewFrame();
@@ -284,8 +208,8 @@ void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, Camera 
                                    ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
   igBegin("Stats", NULL, overlay_flags);
   igText("FPS: %.1f", 1.0f / io->DeltaTime);
-  igText("Zoom: %.2f", camera->zoom);
-  igText("Position: [%.1f, %.1f]", camera->position[0], camera->position[1]);
+  igText("Zoom: %.2f", canvas->scale);
+  // igText("Position: [%.1f, %.1f]", canvas->transform, camera->position[1]);
   igEnd();
 
   // BG color picker
@@ -335,17 +259,16 @@ int main() {
   io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
   // Setup app
-  Camera camera = {.position = {0, 0}, .zoom = 1.0f};
-  CameraControlState control = {0};
+  InputState control = {0};
   AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT};
-  SoftwareOpenGlRenderer renderer = renderer_create(10, 10);
+  SoftwareOpenGlRenderer renderer = renderer_create(WIDTH, HEIGHT);
 
   // Start bg_color
   renderer_set_clear_color(&renderer, (ColorF){0});
 
   SDL_Event event;
   while (app_state.running) {
-    handle_input(&event, &camera, &control, &app_state);
+    handle_input(&event, &renderer.draw_context.canvas, &control, &app_state);
 
     if (app_state.resized) {
       printf("Resized: %d, %d\n", app_state.width, app_state.height);
@@ -355,10 +278,10 @@ int main() {
     }
 
     // Custom renderer
-    renderer_render(&renderer, &camera);
+    renderer_render(&renderer);
 
     // Render ui
-    imgui_render(&app_state, &renderer, &camera, io);
+    imgui_render(&app_state, &renderer, io);
 
     // Opengl render
     glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);

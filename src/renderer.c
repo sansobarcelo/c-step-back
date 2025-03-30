@@ -1,8 +1,9 @@
 #include "renderer.h"
 #include "SDL3/SDL_opengl.h"
+#include "canvas.h"
+#include "draw_context.h"
 #include "graphics/drawer.h"
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
 
 // Private
@@ -33,45 +34,52 @@ GLuint create_texture_from_surface(const Surface *surface) {
 // End Private
 
 // Public implementations
-void renderer_render(SoftwareOpenGlRenderer *renderer, Camera *camera) {
-  Surface *surface = &renderer->surface;
-
+void renderer_render(SoftwareOpenGlRenderer *renderer) {
+  Surface *surface = &renderer->draw_context.surface;
   clear_surface(surface);
 
-  // Object example
+  // // Object example
   vec2 p0 = {0, 0};
   vec2 p1 = {100, 0};
-  world_to_screen(p0, p0, camera, surface->width, surface->height);
-  world_to_screen(p1, p1, camera, surface->width, surface->height);
+  // world_to_screen(p0, p0, camera, surface->width, surface->height);
+  // world_to_screen(p1, p1, camera, surface->width, surface->height);
   ColorF color = {.r = 25, .g = 10, .b = 244, .a = 1.0};
-  draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, color);
+  // draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, color);
+
+  draw_context_draw_thick_line(&renderer->draw_context, p0, p1, 80, color);
 
   // Once drawn everything on buffer
-  update_texture(renderer->texture, &renderer->surface);
+  update_texture(renderer->texture, surface);
 }
 
 SoftwareOpenGlRenderer renderer_create(uint32_t width, uint32_t height) {
   Surface surface = create_surface(width, height);
   GLuint texture = create_texture_from_surface(&surface);
-  return (SoftwareOpenGlRenderer){
+  Canvas canvas;
+  canvas_init(&canvas, width, height);
+
+  DrawContext draw_context = {
       .surface = surface,
+      .canvas = canvas,
+  };
+  return (SoftwareOpenGlRenderer){
+      .draw_context = draw_context,
       .texture = texture,
   };
 }
 
 void renderer_free(SoftwareOpenGlRenderer *renderer) {
+  Surface *surface = &renderer->draw_context.surface;
   glDeleteTextures(1, &renderer->texture);
-  free(renderer->surface.buffer);
+  free(surface->buffer);
 }
 
 void renderer_handle_resize(SoftwareOpenGlRenderer *renderer, uint32_t new_width, uint32_t new_height) {
-  free(renderer->surface.buffer);
+  Surface *surface = &renderer->draw_context.surface;
+  free(surface->buffer);
   glDeleteTextures(1, &renderer->texture);
-
-  renderer->surface = create_surface(new_width, new_height);
-  renderer->texture = create_texture_from_surface(&renderer->surface);
+  renderer->draw_context.surface = create_surface(new_width, new_height);
+  renderer->texture = create_texture_from_surface(&renderer->draw_context.surface);
 }
 
-void renderer_set_clear_color(SoftwareOpenGlRenderer *renderer, ColorF color) {
-  set_clear_color(&renderer->surface, color);
-}
+void renderer_set_clear_color(SoftwareOpenGlRenderer *renderer, ColorF color) { set_clear_color(&renderer->draw_context.surface, color); }
