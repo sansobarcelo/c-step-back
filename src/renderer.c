@@ -10,7 +10,7 @@
 // Private
 void update_texture(GLuint texture, const Surface *surface) {
   glBindTexture(GL_TEXTURE_2D, texture);
-  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->width, surface->height, GL_BGRA, GL_UNSIGNED_BYTE, surface->buffer);
+  glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->width, surface->height, GL_RGBA, GL_UNSIGNED_BYTE, surface->buffer);
 }
 
 Surface create_surface(uint32_t width, uint32_t height) {
@@ -43,10 +43,10 @@ void renderer_render(SoftwareOpenGlRenderer *renderer) {
   rasterizer_clear_surface(surface);
 
   // Draw line
-  vec2 p0 = {0, 0};
-  vec2 p1 = {200, 200};
+  vec2 p0 = {10, 10};
+  vec2 p1 = {200, 10};
   ColorF color = {.r = 0.2f, .g = 0.4f, .b = 1.0f, .a = 1.0f};
-  draw_context_draw_thick_line(&renderer->draw_context, p0, p1, 4, color);
+  draw_context_draw_thick_line(&renderer->draw_context, p0, p1, 10, color);
 
   update_texture(renderer->texture, surface);
 }

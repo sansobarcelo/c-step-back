@@ -1,31 +1,27 @@
 #include "canvas.h"
+#include "cglm/mat3.h"
 #include <cglm/affine.h>
 
 // PRIVATE: recompute matrix from state
 void canvas_update_transform(Canvas *canvas) {
-  mat3 t, s, f, tmp;
-  glm_mat3_identity(t);
-  glm_mat3_identity(s);
-  glm_mat3_identity(f);
+  mat3 scale_mat, translate_mat;
 
-  // Translate the world (camera)
-  t[2][0] = -canvas->translation[0];
-  t[2][1] = -canvas->translation[1];
+  // Create identity matrices
+  glm_mat3_identity(scale_mat);
+  glm_mat3_identity(translate_mat);
 
-  // Scale (zoom)
-  s[0][0] = canvas->scale;
-  s[1][1] = canvas->scale;
+  // Set up scale
+  scale_mat[0][0] = canvas->scale;
+  scale_mat[1][1] = canvas->scale;
 
-  // Flip Y: Multiply Y by -1
-  f[1][1] = -1;
+  // Set up translation
+  // Negate if camera move like, if canvas is right positioned, the objects should display on left.
+  // Same vertical
+  translate_mat[2][0] = -canvas->translation[0];
+  translate_mat[2][1] = -canvas->translation[1];
 
-  // Shift Y down so that origin is at bottom-left of screen (after flip)
-  // Optional: if your screen height is 600, shift Y up by 600
-  f[2][1] = canvas->height; // <-- Add this field if not present
-
-  // Combine: F * S * T
-  glm_mat3_mul(f, s, tmp);
-  glm_mat3_mul(tmp, t, canvas->transform);
+  // Final transform = translate * scale
+  glm_mat3_mul(translate_mat, scale_mat, canvas->transform);
 }
 
 // PUBLIC

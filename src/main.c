@@ -52,9 +52,16 @@ void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mous
     canvas_screen_to_world(canvas, screen_prev, world_prev);
     canvas_screen_to_world(canvas, screen_curr, world_curr);
 
-    vec2 delta = {world_prev[0] - world_curr[0], world_prev[1] - world_curr[1]};
+    vec2 delta;
+    delta[0] = (world_prev[0] - world_curr[0]);
+    delta[1] = -(world_prev[1] - world_curr[1]); // Inverted because sdl 0,0 is top left
 
-    canvas_translate(canvas, delta[0], -delta[1]);
+    // Invert for more natural control
+    glm_vec2_scale(delta, -1, delta);
+
+    printf("delta: %.2f %.2f\n", delta[0], delta[1]);
+
+    canvas_translate(canvas, -delta[0], delta[1]);
 
     state->last_x = mouse_x;
     state->last_y = mouse_y;
@@ -179,7 +186,7 @@ void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, ImGuiIO
   igBegin("Stats", NULL, overlay_flags);
   igText("FPS: %.1f", 1.0f / io->DeltaTime);
   igText("Zoom: %.2f", canvas->scale);
-  // igText("Position: [%.1f, %.1f]", canvas->transform, camera->position[1]);
+  igText("Position: [%.1f, %.1f]", canvas->translation[0], canvas->translation[1]);
   igEnd();
 
   // BG color picker
@@ -234,6 +241,9 @@ int main() {
 
   // Start bg_color
   renderer_set_clear_color(&renderer, (ColorF){0});
+
+  // To test
+  renderer.draw_context.canvas.translation[0] += 100;
 
   SDL_Event event;
   while (app_state.running) {
