@@ -14,11 +14,11 @@ void canvas_update_transform(Canvas *canvas) {
   scale_mat[0][0] = canvas->scale;
   scale_mat[1][1] = canvas->scale;
 
-  // Set up translation
+  // Set up position
   // Negate if camera move like, if canvas is right positioned, the objects should display on left.
   // Same vertical
-  translate_mat[2][0] = -canvas->translation[0];
-  translate_mat[2][1] = -canvas->translation[1];
+  translate_mat[2][0] = -canvas->position[0];
+  translate_mat[2][1] = -canvas->position[1];
 
   // Final transform = translate * scale
   glm_mat3_mul(translate_mat, scale_mat, canvas->transform);
@@ -31,8 +31,8 @@ void canvas_init(Canvas *canvas, float width, float height) {
   canvas->width = width;
   canvas->height = height;
   canvas->scale = 1.0f;
-  canvas->translation[0] = 0.0f;
-  canvas->translation[1] = 0.0f;
+  canvas->position[0] = 0.0f;
+  canvas->position[1] = 0.0f;
   canvas_update_transform(canvas); // Ensure initial transform is set
 }
 
@@ -51,8 +51,8 @@ void canvas_restore(Canvas *canvas) {
 }
 
 void canvas_translate(Canvas *canvas, float tx, float ty) {
-  canvas->translation[0] += tx;
-  canvas->translation[1] += ty;
+  canvas->position[0] += tx;
+  canvas->position[1] += ty;
   canvas_update_transform(canvas);
 }
 

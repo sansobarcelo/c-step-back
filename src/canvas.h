@@ -15,7 +15,7 @@ typedef struct Canvas {
   float height;
 
   float scale;
-  vec2 translation;
+  vec2 position;
 } Canvas;
 
 void canvas_init(Canvas *canvas, float screen_width, float screen_height);
