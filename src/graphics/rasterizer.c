@@ -1,4 +1,4 @@
-#include "drawer.h"
+#include "rasterizer.h"
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -25,7 +25,7 @@ if (x < surface->width && y < surface->height) {
   }
 }
 
-void set_clear_color(Surface *surface, ColorF color) {
+void rasterizer_set_clear_color(Surface *surface, ColorF color) {
   if (clear_buffer && (surface->width != clear_width || surface->height != clear_height)) {
     free(clear_buffer);
     clear_buffer = (void *)0; // Set pointer to null
@@ -48,34 +48,12 @@ void set_clear_color(Surface *surface, ColorF color) {
   }
 }
 
-void clear_surface(Surface *surface) {
+void rasterizer_clear_surface(Surface *surface) {
   // If size change update clear buffer with the prev color
   if (surface->width != clear_width || surface->height != clear_height) {
-    set_clear_color(surface, clear_colorf);
+    rasterizer_set_clear_color(surface, clear_colorf);
   }
   memcpy(surface->buffer, clear_buffer, sizeof(uint32_t) * surface->width * surface->height);
-}
-
-void plot_line(Surface *surface, int x0, int y0, int x1, int y1, ColorF color) {
-  int dx = abs(x1 - x0), sx = x0 < x1 ? 1 : -1;
-  int dy = -abs(y1 - y0), sy = y0 < y1 ? 1 : -1;
-  int err = dx + dy, e2;
-  uint32_t color_packed = pack_color(color);
-  while (1) {
-    set_pixel(surface, x0, y0, color_packed);
-    if (x0 == x1 && y0 == y1)
-      break; // Exit condition
-
-    e2 = 2 * err;
-    if (e2 >= dy) {
-      err += dy;
-      x0 += sx;
-    } // Move in x direction
-    if (e2 <= dx) {
-      err += dx;
-      y0 += sy;
-    } // Move in y direction
-  }
 }
 
 void draw_span(Surface *surface, int y, int x0, int x1, uint32_t color) {
@@ -150,7 +128,7 @@ void draw_filled_triangle(Surface *surface, Point p0, Point p1, Point p2, uint32
   }
 }
 
-void draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, ColorF color) {
+void rasterizer_draw_thick_line(Surface *surface, Point p0, Point p1, int thickness, ColorF color) {
   if (surface->width < 1)
     return;
 

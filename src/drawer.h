@@ -2,7 +2,7 @@
 #define DRAW_CONTEXT_H 
 
 #include "canvas.h"
-#include "graphics/drawer.h"
+#include "graphics/rasterizer.h"
 
 typedef struct DrawContext {
     Canvas canvas;

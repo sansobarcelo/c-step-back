@@ -1,5 +1,4 @@
-#include "draw_context.h"
-#include "graphics/drawer.h"
+#include "drawer.h"
 #include "SDL3/SDL_opengl.h"
 #include <stdint.h>
 

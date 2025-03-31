@@ -12,7 +12,6 @@
 #include <SDL3/SDL_video.h>
 #include <cglm/vec2.h>
 
-#include "graphics/drawer.h"
 #include "renderer.h"
 
 #define CIMGUI_USE_OPENGL3
@@ -37,34 +36,6 @@ typedef struct {
   int last_x, last_y;
 } InputState;
 
-// void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
-//   if (mouse_down) {
-//     if (!state->dragging) {
-//       state->dragging = true;
-//       state->last_x = mouse_x;
-//       state->last_y = mouse_y;
-//       return;
-//     }
-//
-//     // Calculate the mouse movement (change in screen space)
-//     int dx = mouse_x - state->last_x;
-//     int dy = mouse_y - state->last_y;
-//
-//     // Adjust the movement by zoom factor: divide by zoom to move correctly in world space
-//     float zoom_factor = canvas->width / (float)WIDTH; // or use canvas->zoom if available
-//
-//     // Apply movement to the canvas transform (invert the direction)
-//     canvas->transform[2][0] += dx / zoom_factor; // Adjust transform matrix for X
-//     canvas->transform[2][1] += dy / zoom_factor; // Adjust transform matrix for Y
-//
-//     // Update the last mouse position for the next frame
-//     state->last_x = mouse_x;
-//     state->last_y = mouse_y;
-//   } else {
-//     state->dragging = false;
-//   }
-// }
-
 void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
   if (mouse_down) {
     if (!state->dragging) {
@@ -74,14 +45,16 @@ void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mous
       return;
     }
 
-    int dx = mouse_x - state->last_x;
-    int dy = mouse_y - state->last_y;
+    vec2 screen_prev = {state->last_x, canvas->height - state->last_y};
+    vec2 screen_curr = {mouse_x, canvas->height - mouse_y};
+    vec2 world_prev, world_curr;
 
-    // Invert y axis:
-    dy = -dy;
+    canvas_screen_to_world(canvas, screen_prev, world_prev);
+    canvas_screen_to_world(canvas, screen_curr, world_curr);
 
-    // Use canvas_translate instead of doing it manually
-    canvas_translate(canvas, -dx / canvas->scale, dy / canvas->scale);
+    vec2 delta = {world_prev[0] - world_curr[0], world_prev[1] - world_curr[1]};
+
+    canvas_translate(canvas, delta[0], -delta[1]);
 
     state->last_x = mouse_x;
     state->last_y = mouse_y;
@@ -90,19 +63,16 @@ void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mous
   }
 }
 
-void canvas_handle_zoom(Canvas *canvas, float zoom_factor, int mouse_x, int mouse_y, float screen_width, float screen_height) {
-  // Get world position under the mouse before zoom
-  vec2 world_before = {(mouse_x - screen_width / 2.0f) / canvas->scale + canvas->translation[0],
-                       (screen_height / 2.0f - mouse_y) / canvas->scale + canvas->translation[1]};
+void canvas_handle_zoom(Canvas *canvas, float zoom_factor, int mouse_x, int mouse_y) {
+  vec2 screen = {mouse_x, mouse_y};
+  vec2 world_before, world_after;
 
-  // Update zoom via helper
+  canvas_screen_to_world(canvas, screen, world_before);
+
   canvas_scale(canvas, canvas->scale * zoom_factor);
 
-  // Get world position after zoom
-  vec2 world_after = {(mouse_x - screen_width / 2.0f) / canvas->scale + canvas->translation[0],
-                      (screen_height / 2.0f - mouse_y) / canvas->scale + canvas->translation[1]};
+  canvas_screen_to_world(canvas, screen, world_after);
 
-  // Adjust translation to keep the point under the cursor fixed
   canvas_translate(canvas, world_before[0] - world_after[0], world_before[1] - world_after[1]);
 }
 
@@ -164,7 +134,7 @@ void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, App
       float screen_height = app_state->height;
       float zoom_factor = SDL_powf(1.1f, event->wheel.y);
 
-      canvas_handle_zoom(canvas, zoom_factor, mx, my, screen_width, screen_height);
+      canvas_handle_zoom(canvas, zoom_factor, mx, my);
       break;
     }
 
@@ -251,7 +221,6 @@ int main() {
   // Setup ImGui
   igCreateContext(NULL);
   igStyleColorsDark(NULL);
-  // igGetStyle()->WindowPadding = (ImVec2){0, 0};
 
   ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
   ImGui_ImplOpenGL3_Init("#version 330");

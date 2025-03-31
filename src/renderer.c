@@ -1,8 +1,9 @@
+
 #include "renderer.h"
 #include "SDL3/SDL_opengl.h"
 #include "canvas.h"
-#include "draw_context.h"
-#include "graphics/drawer.h"
+#include "drawer.h"
+#include "graphics/rasterizer.h"
 #include <stdint.h>
 #include <stdlib.h>
 
@@ -36,19 +37,17 @@ GLuint create_texture_from_surface(const Surface *surface) {
 // Public implementations
 void renderer_render(SoftwareOpenGlRenderer *renderer) {
   Surface *surface = &renderer->draw_context.surface;
-  clear_surface(surface);
+  Canvas *canvas = &renderer->draw_context.canvas;
 
-  // // Object example
+  canvas_update_transform(canvas);
+  rasterizer_clear_surface(surface);
+
+  // Draw line
   vec2 p0 = {0, 0};
-  vec2 p1 = {100, 0};
-  // world_to_screen(p0, p0, camera, surface->width, surface->height);
-  // world_to_screen(p1, p1, camera, surface->width, surface->height);
-  ColorF color = {.r = 25, .g = 10, .b = 244, .a = 1.0};
-  // draw_thick_line(surface, (Point){p0[0], p0[1]}, (Point){p1[0], p1[1]}, 25, color);
+  vec2 p1 = {200, 200};
+  ColorF color = {.r = 0.2f, .g = 0.4f, .b = 1.0f, .a = 1.0f};
+  draw_context_draw_thick_line(&renderer->draw_context, p0, p1, 4, color);
 
-  draw_context_draw_thick_line(&renderer->draw_context, p0, p1, 80, color);
-
-  // Once drawn everything on buffer
   update_texture(renderer->texture, surface);
 }
 
@@ -80,6 +79,8 @@ void renderer_handle_resize(SoftwareOpenGlRenderer *renderer, uint32_t new_width
   glDeleteTextures(1, &renderer->texture);
   renderer->draw_context.surface = create_surface(new_width, new_height);
   renderer->texture = create_texture_from_surface(&renderer->draw_context.surface);
+  renderer->draw_context.canvas.height = new_height;
+  renderer->draw_context.canvas.width = new_width;
 }
 
-void renderer_set_clear_color(SoftwareOpenGlRenderer *renderer, ColorF color) { set_clear_color(&renderer->draw_context.surface, color); }
+void renderer_set_clear_color(SoftwareOpenGlRenderer *renderer, ColorF color) { rasterizer_set_clear_color(&renderer->draw_context.surface, color); }

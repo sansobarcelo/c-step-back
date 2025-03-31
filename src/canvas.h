@@ -22,10 +22,9 @@ void canvas_init(Canvas *canvas, float screen_width, float screen_height);
 void canvas_translate(Canvas *canvas, float tx, float ty);
 void canvas_scale(Canvas *canvas, float scale);
 void canvas_rotate(Canvas *canvas, float radians);
-void canvas_save(Canvas *canvas);
-void canvas_restore(Canvas *canvas);
-
-// Transforms world space to screen space
+void canvas_update_transform(Canvas *canvas);
+void canvas_world_to_screen(Canvas *canvas, vec2 world, vec2 screen);
+void canvas_screen_to_world(Canvas *canvas, vec2 screen, vec2 world);
 void canvas_transform_point(Canvas *canvas, vec2 world, vec2 screen);
 
 #endif // CANVAS_H
