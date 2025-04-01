@@ -29,6 +29,8 @@ typedef struct {
   bool running;
   uint32_t width;
   uint32_t height;
+
+  Line line;
 } AppState;
 
 typedef struct {
@@ -60,7 +62,6 @@ void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mous
     int invert = -1;
     canvas_translate(canvas, invert * delta[0], invert * delta[1]);
 
-    printf("Delta: %.2f, %.2f\n", delta[0], delta[1]);
     state->last_x = mouse_x;
     state->last_y = mouse_y;
   } else {
@@ -92,16 +93,16 @@ void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, App
     if (event->type == SDL_EVENT_KEY_DOWN) {
       switch (event->key.key) {
       case SDLK_W:
-        canvas->transform[2][1] += 5; // Move canvas up
+        app_state->line.transform.position[1] += 10;
         break;
       case SDLK_S:
-        canvas->transform[2][1] -= 5; // Move canvas down
+        app_state->line.transform.position[1] -= 10;
         break;
       case SDLK_A:
-        canvas->transform[2][0] -= 5; // Move canvas left
+        app_state->line.transform.position[0] -= 10;
         break;
       case SDLK_D:
-        canvas->transform[2][0] += 5; // Move canvas right
+        app_state->line.transform.position[0] += 10;
         break;
       }
     }
@@ -187,6 +188,12 @@ void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, ImGuiIO
   igText("Position: [%.1f, %.1f]", canvas->position[0], canvas->position[1]);
   igEnd();
 
+  // Line data
+  Line *line = &app_state->line;
+  igBegin("Line data", NULL, overlay_flags);
+  igText("Line world pos: [%.1f, %.1f]", line->transform.position[0], line->transform.position[1]);
+  igEnd();
+
   // BG color picker
   igBegin("Color Picker Example", NULL, 0);
   igText("Pick a color:");
@@ -242,6 +249,9 @@ int main() {
 
   // To test
   renderer.draw_context.canvas.position[0] += 100;
+  Transform transform = {.position = {100, 0}};
+  Line line = {.a = {0, 0}, .b = {200, 0}, .thickness = 20, .transform = transform};
+  app_state.line = line;
 
   SDL_Event event;
   while (app_state.running) {
@@ -255,7 +265,7 @@ int main() {
     }
 
     // Custom renderer
-    renderer_render(&renderer);
+    renderer_render(&renderer, &app_state.line, 1);
 
     // Render ui
     imgui_render(&app_state, &renderer, io);

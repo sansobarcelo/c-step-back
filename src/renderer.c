@@ -2,6 +2,7 @@
 #include "renderer.h"
 #include "SDL3/SDL_opengl.h"
 #include "canvas.h"
+#include "cglm/types.h"
 #include "drawer.h"
 #include "graphics/rasterizer.h"
 #include <stdint.h>
@@ -35,17 +36,31 @@ GLuint create_texture_from_surface(const Surface *surface) {
 // End Private
 
 // Public implementations
-void renderer_render(SoftwareOpenGlRenderer *renderer) {
+void renderer_render(SoftwareOpenGlRenderer *renderer, Line *lines, int count) {
   Surface *surface = &renderer->draw_context.surface;
   Canvas *canvas = &renderer->draw_context.canvas;
 
   canvas_update_transform(canvas);
   rasterizer_clear_surface(surface);
 
+  // Draw line entity
+  for (int i = 0; i < count; i++) {
+    ColorF color = {.r = 0.f, .g = 0.f, .b = 1.0f, .a = 1.0f};
+    Line line = lines[i];
+    // Move to world
+    vec2 points[2];
+    points[0][0] = line.a[0];
+    points[0][1] = line.a[1];
+    points[1][0] = line.b[0];
+    points[1][1] = line.b[1];
+    transform_points(&line.transform, points, points, 2);
+    draw_context_draw_thick_line(&renderer->draw_context, points[0], points[1], 10, color);
+  }
+
   // Draw line
-  vec2 p0 = {10, 10};
-  vec2 p1 = {200, 10};
   ColorF color = {.r = 0.2f, .g = 0.4f, .b = 1.0f, .a = 1.0f};
+  vec2 p0 = {0, 50};
+  vec2 p1 = {200, 50};
   draw_context_draw_thick_line(&renderer->draw_context, p0, p1, 10, color);
 
   update_texture(renderer->texture, surface);
