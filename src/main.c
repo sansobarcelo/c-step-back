@@ -21,6 +21,9 @@
 #include "cimgui_impl.h"
 #define igGetIO igGetIO_Nil
 
+#define CANVAS_MIN_SCALE 0.1f
+#define CANVAS_MAX_SCALE 10.0f
+
 #define WIDTH 800
 #define HEIGHT 600
 
@@ -38,6 +41,16 @@ typedef struct {
   int last_x, last_y;
 } InputState;
 
+// Apply zoom scale with clamping
+void canvas_apply_zoom(Canvas *canvas, float zoom_factor) {
+  float new_scale = canvas->scale * zoom_factor;
+  if (new_scale < CANVAS_MIN_SCALE)
+    new_scale = CANVAS_MIN_SCALE;
+  if (new_scale > CANVAS_MAX_SCALE)
+    new_scale = CANVAS_MAX_SCALE;
+  canvas->scale = new_scale;
+}
+
 void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
   if (mouse_down) {
     if (!state->dragging) {
@@ -47,20 +60,15 @@ void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mous
       return;
     }
 
-    vec2 screen_prev = {state->last_x, canvas->height - state->last_y};
-    vec2 screen_curr = {mouse_x, canvas->height - mouse_y};
-    vec2 world_prev, world_curr;
+    int dx = mouse_x - state->last_x;
+    int dy = mouse_y - state->last_y;
 
-    canvas_screen_to_world(canvas, screen_prev, world_prev);
-    canvas_screen_to_world(canvas, screen_curr, world_curr);
+    // Apply scale to convert screen-space delta to world-space movement
+    float sensitivity = 0.4f; // tweak this value
+    float world_dx = -dx * powf(canvas->scale, sensitivity);
+    float world_dy = dy * powf(canvas->scale, sensitivity); // flip Y
 
-    vec2 delta = {world_curr[0] - world_prev[0], world_curr[1] - world_prev[1]};
-
-    // canvas_translate(canvas, delta[0], delta[1]);
-
-    // Invert drag for more natura move
-    int invert = -1;
-    canvas_translate(canvas, invert * delta[0], invert * delta[1]);
+    canvas_translate(canvas, world_dx, world_dy);
 
     state->last_x = mouse_x;
     state->last_y = mouse_y;
@@ -74,11 +82,10 @@ void canvas_handle_zoom(Canvas *canvas, float zoom_factor, int mouse_x, int mous
   vec2 world_before, world_after;
 
   canvas_screen_to_world(canvas, screen, world_before);
-
-  canvas_scale(canvas, canvas->scale * zoom_factor);
-
+  canvas_apply_zoom(canvas, zoom_factor);
   canvas_screen_to_world(canvas, screen, world_after);
 
+  // Offset canvas so zoom appears centered on cursor
   canvas_translate(canvas, world_before[0] - world_after[0], world_before[1] - world_after[1]);
 }
 

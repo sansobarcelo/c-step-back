@@ -44,6 +44,7 @@ void renderer_render(SoftwareOpenGlRenderer *renderer, Line *lines, int count) {
   rasterizer_clear_surface(surface);
 
   // Draw line entity
+  float thickness = 10 * canvas->scale;
   for (int i = 0; i < count; i++) {
     ColorF color = {.r = 0.f, .g = 0.f, .b = 1.0f, .a = 1.0f};
     Line line = lines[i];
@@ -54,14 +55,14 @@ void renderer_render(SoftwareOpenGlRenderer *renderer, Line *lines, int count) {
     points[1][0] = line.b[0];
     points[1][1] = line.b[1];
     transform_points(&line.transform, points, points, 2);
-    draw_context_draw_thick_line(&renderer->draw_context, points[0], points[1], 10, color);
+    draw_context_draw_thick_line(&renderer->draw_context, points[0], points[1], thickness, color);
   }
 
   // Draw line
   ColorF color = {.r = 0.2f, .g = 0.4f, .b = 1.0f, .a = 1.0f};
   vec2 p0 = {0, 50};
   vec2 p1 = {200, 50};
-  draw_context_draw_thick_line(&renderer->draw_context, p0, p1, 10, color);
+  draw_context_draw_thick_line(&renderer->draw_context, p0, p1, thickness, color);
 
   update_texture(renderer->texture, surface);
 }
