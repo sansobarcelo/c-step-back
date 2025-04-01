@@ -9,6 +9,9 @@ set(SDL_HAPTIC OFF)
 set(SDL_TEST OFF)
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
+#flecs
+add_subdirectory(flecs EXCLUDE_FROM_ALL)
+
 # cglm
 add_subdirectory(cglm EXCLUDE_FROM_ALL)
 if (MSVC)
@@ -58,4 +61,4 @@ target_link_libraries(cimgui_with_backends PUBLIC
 
 # Define vendor
 add_library(vendor INTERFACE)
-target_link_libraries(vendor INTERFACE cimgui_with_backends cglm)
+target_link_libraries(vendor INTERFACE cimgui_with_backends cglm flecs)

@@ -12,6 +12,8 @@
 #include <SDL3/SDL_video.h>
 #include <cglm/vec2.h>
 
+#include "components.h"
+#include "flecs.h"
 #include "renderer.h"
 
 #define CIMGUI_USE_OPENGL3
@@ -32,6 +34,8 @@ typedef struct {
   bool running;
   uint32_t width;
   uint32_t height;
+
+  ecs_world_t *world;
 
   Line line;
   bool show_debug;
@@ -261,9 +265,14 @@ int main() {
   ImGuiIO *io = igGetIO();
   io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
+  // Setup world
+  ecs_world_t *world = ecs_init();
+  // Register component types
+  ECS_COMPONENT(world, Transform);
+
   // Setup app
   InputState control = {0};
-  AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT, .show_debug = true};
+  AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT, .show_debug = true, .world = world};
   SoftwareOpenGlRenderer renderer = renderer_create(WIDTH, HEIGHT);
 
   // Start bg_color
@@ -302,6 +311,7 @@ int main() {
   }
 
   // Cleanup
+  ecs_fini(app_state.world);
   ImGui_ImplOpenGL3_Shutdown();
   ImGui_ImplSDL3_Shutdown();
   igDestroyContext(NULL);

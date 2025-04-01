@@ -7,3 +7,6 @@
 [submodule "vendor/cimgui"]
 	path = vendor/cimgui
 	url = git@github.com:cimgui/cimgui
+[submodule "vendor/flecs"]
+	path = vendor/flecs
+	url = https://github.com/SanderMertens/flecs
