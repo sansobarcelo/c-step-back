@@ -34,6 +34,7 @@ typedef struct {
   uint32_t height;
 
   Line line;
+  bool show_debug;
 } AppState;
 
 typedef struct {
@@ -99,6 +100,9 @@ void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, App
 
     if (event->type == SDL_EVENT_KEY_DOWN) {
       switch (event->key.key) {
+      case SDLK_F1:
+        app_state->show_debug = !app_state->show_debug;
+        break;
       case SDLK_W:
         app_state->line.transform.position[1] += 10;
         break;
@@ -151,6 +155,10 @@ void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, App
       break;
     }
 
+    case SDL_EVENT_MOUSE_BUTTON_UP: {
+      break;
+    }
+
     default:
       break;
     }
@@ -184,39 +192,46 @@ void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, ImGuiIO
   igEnd();
   igPopStyleVar(2);
 
-  // Overlay stats
-  igSetNextWindowPos((ImVec2){20, 20}, ImGuiCond_Once, (ImVec2){0, 0});
-  igSetNextWindowBgAlpha(0.6f);
-  ImGuiWindowFlags overlay_flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings |
-                                   ImGuiWindowFlags_NoFocusOnAppearing | ImGuiWindowFlags_NoNav;
-  igBegin("Stats", NULL, overlay_flags);
-  igText("FPS: %.1f", 1.0f / io->DeltaTime);
-  igText("Zoom: %.2f", canvas->scale);
-  igText("Position: [%.1f, %.1f]", canvas->position[0], canvas->position[1]);
-  igEnd();
+  // Left Panel (Fullscreen Vertical)
+  if (app_state->show_debug) {
+    ImGuiViewport *viewport = igGetMainViewport();
+    ImVec2 panel_pos = viewport->Pos;
+    ImVec2 panel_size = {300, viewport->Size.y};
 
-  // Line data
-  Line *line = &app_state->line;
-  igBegin("Line data", NULL, overlay_flags);
-  igText("Line world pos: [%.1f, %.1f]", line->transform.position[0], line->transform.position[1]);
-  igEnd();
+    igSetNextWindowPos(panel_pos, ImGuiCond_None, (ImVec2){0.0f, 0.0f});
+    igSetNextWindowSize(panel_size, ImGuiCond_None);
 
-  // BG color picker
-  igBegin("Color Picker Example", NULL, 0);
-  igText("Pick a color:");
+    igBegin("Debug Panel", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
-  // TODO: Create state
-  static float bg_color[4] = {0};
-  if (igColorEdit4("Color", bg_color, ImGuiColorEditFlags_None)) {
-    ColorF bg_colorf = {
-        .r = bg_color[0],
-        .g = bg_color[1],
-        .b = bg_color[2],
-        .a = bg_color[3],
-    };
-    renderer_set_clear_color(renderer, bg_colorf);
+    igText("FPS: %.1f", 1.0f / io->DeltaTime);
+    igText("Frame time %.2f ms/frame", 1000.0f / igGetIO()->Framerate);
+    igSeparator();
+
+    igText("Canvas Zoom: %.2f", canvas->scale);
+    igText("Canvas Position: [%.1f, %.1f]", canvas->position[0], canvas->position[1]);
+    igSeparator();
+
+    // Line data
+    Line *line = &app_state->line;
+    igText("Line world pos: [%.1f, %.1f]", line->transform.position[0], line->transform.position[1]);
+    igSeparator();
+
+    // BG color picker
+    igText("Clear color");
+    // TODO: Create state
+    static float bg_color[4] = {0};
+    if (igColorEdit4("Color", bg_color, ImGuiColorEditFlags_None)) {
+      ColorF bg_colorf = {
+          .r = bg_color[0],
+          .g = bg_color[1],
+          .b = bg_color[2],
+          .a = bg_color[3],
+      };
+      renderer_set_clear_color(renderer, bg_colorf);
+    }
+
+    igEnd();
   }
-  igEnd();
 
   igRender();
 }
@@ -235,7 +250,7 @@ int main() {
   SDL_Window *window = SDL_CreateWindow("Software Renderer + ImGui", WIDTH, HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
   SDL_GLContext gl_context = SDL_GL_CreateContext(window);
   SDL_GL_MakeCurrent(window, gl_context);
-  SDL_GL_SetSwapInterval(0); // vsync
+  SDL_GL_SetSwapInterval(1); // vsync
 
   // Setup ImGui
   igCreateContext(NULL);
@@ -248,7 +263,7 @@ int main() {
 
   // Setup app
   InputState control = {0};
-  AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT};
+  AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT, .show_debug = true};
   SoftwareOpenGlRenderer renderer = renderer_create(WIDTH, HEIGHT);
 
   // Start bg_color
