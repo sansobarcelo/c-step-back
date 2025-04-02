@@ -45,7 +45,7 @@ void renderer_render(SoftwareOpenGlRenderer *renderer, ecs_world_t *world, ecs_q
   canvas_update_transform(canvas);
   rasterizer_clear_surface(surface);
 
-  // Draw line entity
+  // TODO: Hard coded draw system for lines
   float thickness = 10 * canvas->scale;
   ecs_iter_t it = ecs_query_iter(world, query);
   while (ecs_query_next(&it)) {
