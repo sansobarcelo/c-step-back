@@ -54,12 +54,13 @@ void renderer_render(SoftwareOpenGlRenderer *renderer, ecs_world_t *world, ecs_q
 
     for (int i = 0; i < it.count; i++) {
       ColorF color = {.r = 0.0f, .g = 0.0f, .b = 1.0f, .a = 1.0f};
+
       // Move to world
       vec2 points[2];
-      points[0][0] = line[i].ax;
-      points[0][1] = line[i].ay;
-      points[1][0] = line[i].bx;
-      points[1][1] = line[i].by;
+      points[0][0] = line[i].a[0];
+      points[0][1] = line[i].a[1];
+      points[1][0] = line[i].b[0];
+      points[1][1] = line[i].b[1];
 
       transform_points(&transform[i], points, points, 2);
       draw_context_draw_thick_line(&renderer->draw_context, points[0], points[1], thickness, color);
