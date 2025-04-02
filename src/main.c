@@ -259,23 +259,27 @@ int main() {
   return 0;
 }
 
-void input_update_from_sdl3(Input *input, const SDL_Event *e) {
-  switch (e->type) {
-  case SDL_EVENT_KEY_DOWN:
-  case SDL_EVENT_KEY_UP: {
-    int key = e->key.key;
-    if (key >= 0 && key < MAX_KEYS) {
-      bool is_down = (e->type == SDL_EVENT_KEY_DOWN);
-      KeyState *k = &input->keys[key];
-      if (k->down != is_down) {
-        k->down = is_down;
-        k->pressed = is_down;
-        k->released = !is_down;
-      }
-    }
-    break;
+void input_reset(Input *input) {
+  for (int i = 0; i < MAX_KEYS; i++) {
+    input->keys[i].pressed = false;
+    input->keys[i].released = false;
+  }
+  for (int i = 0; i < MAX_MOUSE_BUTTONS; i++) {
+    input->mouse_buttons[i].pressed = false;
+    input->mouse_buttons[i].released = false;
   }
 
+  input->mouse_delta_x = 0;
+  input->mouse_delta_y = 0;
+  input->wheel_x = 0;
+  input->wheel_y = 0;
+
+  input->zoom_requested = false;
+  input->mouse_was_dragging = input->mouse_dragging;
+}
+
+void input_update_from_sdl3(Input *input, const SDL_Event *e) {
+  switch (e->type) {
   case SDL_EVENT_MOUSE_BUTTON_DOWN:
   case SDL_EVENT_MOUSE_BUTTON_UP: {
     int btn = e->button.button;
@@ -287,40 +291,42 @@ void input_update_from_sdl3(Input *input, const SDL_Event *e) {
         mb->pressed = is_down;
         mb->released = !is_down;
       }
+
+      if (btn == SDL_BUTTON_MIDDLE) {
+        if (is_down) {
+          input->mouse_dragging = true;
+          input->drag_origin_x = input->mouse_x;
+          input->drag_origin_y = input->mouse_y;
+        } else {
+          input->mouse_dragging = false;
+        }
+      }
     }
     break;
   }
 
-  case SDL_EVENT_MOUSE_MOTION: {
-    int new_x = e->motion.x;
-    int new_y = e->motion.y;
-    input->mouse_delta_x = new_x - input->mouse_x;
-    input->mouse_delta_y = new_y - input->mouse_y;
-    input->mouse_x = new_x;
-    input->mouse_y = new_y;
+  case SDL_EVENT_MOUSE_MOTION:
+    input->mouse_delta_x = e->motion.x - input->mouse_x;
+    input->mouse_delta_y = e->motion.y - input->mouse_y;
+    input->mouse_x = e->motion.x;
+    input->mouse_y = e->motion.y;
     break;
-  }
 
   case SDL_EVENT_MOUSE_WHEEL:
+    input->zoom_requested = true;
+    input->zoom_factor = SDL_powf(1.1f, e->wheel.y);
+    input->zoom_center_x = input->mouse_x;
+    input->zoom_center_y = input->mouse_y;
     input->wheel_x += e->wheel.x;
     input->wheel_y += e->wheel.y;
     break;
 
-    // case SDL_EVENT_KEYBOARD_MODIFIER: {
-    //   SDL_Keymod mod = SDL_GetModState();
-    //   input->shift = mod & (KMOD_LSHIFT | KMOD_RSHIFT);
-    //   input->ctrl = mod & (KMOD_LCTRL | KMOD_RCTRL);
-    //   input->alt = mod & (KMOD_LALT | KMOD_RALT);
-    //   break;
-    // }
-
-  default:
-    break;
+    // rest unchanged...
   }
 }
 
 void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, AppState *app_state, Input *input) {
-
+  input_reset(input);
   while (SDL_PollEvent(event)) {
     if (event->type == SDL_EVENT_QUIT) {
       app_state->running = false;
@@ -334,70 +340,5 @@ void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, App
 
     ImGui_ImplSDL3_ProcessEvent(event);
     input_update_from_sdl3(input, event);
-
-    // if (event->type == SDL_EVENT_KEY_DOWN) {
-    //   switch (event->key.key) {
-    //   case SDLK_F1:
-    //     app_state->show_debug = !app_state->show_debug;
-    //     break;
-    //   case SDLK_W:
-    //     // app_state->line.transform.position[1] += 10;
-    //     break;
-    //   case SDLK_S:
-    //     // app_state->line.transform.position[1] -= 10;
-    //     break;
-    //   case SDLK_A:
-    //     // app_state->line.transform.position[0] -= 10;
-    //     break;
-    //   case SDLK_D:
-    //     // app_state->line.transform.position[0] += 10;
-    //     break;
-    //   }
-    // }
-    //
-    // switch (event->type) {
-    // case SDL_EVENT_MOUSE_MOTION: {
-    //   int mx = event->motion.x;
-    //   int my = event->motion.y;
-    //
-    //   uint32_t buttons = SDL_GetMouseState(NULL, NULL);
-    //   bool dragging = (buttons & SDL_BUTTON_MIDDLE) != 0;
-    //
-    //   if (dragging) {
-    //     if (!input_state->dragging) {
-    //       input_state->dragging = true;
-    //       input_state->last_x = mx;
-    //       input_state->last_y = my;
-    //       break;
-    //     }
-    //
-    //     canvas_handle_drag(canvas, input_state, mx, my, true);
-    //
-    //     input_state->last_x = mx;
-    //     input_state->last_y = my;
-    //   } else {
-    //     input_state->dragging = false;
-    //   }
-    //   break;
-    // }
-    // case SDL_EVENT_MOUSE_WHEEL: {
-    //   float mx, my;
-    //   SDL_GetMouseState(&mx, &my);
-    //
-    //   float screen_width = app_state->width;
-    //   float screen_height = app_state->height;
-    //   float zoom_factor = SDL_powf(1.1f, event->wheel.y);
-    //
-    //   canvas_handle_zoom(canvas, zoom_factor, mx, my);
-    //   break;
-    // }
-    //
-    // case SDL_EVENT_MOUSE_BUTTON_UP: {
-    //   break;
-    // }
-    //
-    // default:
-    //   break;
-    // }
   }
 }

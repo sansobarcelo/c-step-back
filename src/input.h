@@ -17,20 +17,24 @@ typedef struct {
   KeyState keys[MAX_KEYS];
   KeyState mouse_buttons[MAX_MOUSE_BUTTONS];
 
-  // Mouse position
-  int mouse_x;
-  int mouse_y;
-  int mouse_delta_x;
-  int mouse_delta_y;
+  // Mouse state
+  int mouse_x, mouse_y;
+  int mouse_delta_x, mouse_delta_y;
+  float wheel_x, wheel_y;
 
-  // Mouse wheel
-  float wheel_x;
-  float wheel_y;
+  // Modifiers
+  bool shift, ctrl, alt;
 
-  // Modifier keys
-  bool shift;
-  bool ctrl;
-  bool alt;
+  // Dragging logic
+  bool mouse_dragging;
+  bool mouse_was_dragging;
+  int drag_origin_x, drag_origin_y;
+
+  // Zoom request (used by systems)
+  bool zoom_requested;
+  float zoom_factor;
+  int zoom_center_x;
+  int zoom_center_y;
 } Input;
 
-#endif // COMPONENTS_INPUT_H
+#endif
