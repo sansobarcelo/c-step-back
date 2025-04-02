@@ -5,15 +5,14 @@
 #include <cglm/cglm.h>
 
 typedef struct {
-  vec2 position;
-} Transform;
+  float pos_x, pos_y;
+} Position;
 
 typedef struct {
-  vec2 a;
-  vec2 b;
-  Transform transform; // World info
+  float ax, ay;
+  float bx, by;
   float thickness;
 } Line;
 
-void transform_points(Transform *transform, vec2 *in_points, vec2 *out_points, int count);
+void transform_points(Position *position, vec2 *in_points, vec2 *out_points, int count);
 #endif // COMPONENTS_H

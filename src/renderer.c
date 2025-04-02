@@ -3,7 +3,9 @@
 #include "SDL3/SDL_opengl.h"
 #include "canvas.h"
 #include "cglm/types.h"
+#include "components.h"
 #include "drawer.h"
+#include "flecs.h"
 #include "graphics/rasterizer.h"
 #include <stdint.h>
 #include <stdlib.h>
@@ -36,7 +38,7 @@ GLuint create_texture_from_surface(const Surface *surface) {
 // End Private
 
 // Public implementations
-void renderer_render(SoftwareOpenGlRenderer *renderer, Line *lines, int count) {
+void renderer_render(SoftwareOpenGlRenderer *renderer, ecs_world_t *world, ecs_query_t *query) {
   Surface *surface = &renderer->draw_context.surface;
   Canvas *canvas = &renderer->draw_context.canvas;
 
@@ -45,17 +47,23 @@ void renderer_render(SoftwareOpenGlRenderer *renderer, Line *lines, int count) {
 
   // Draw line entity
   float thickness = 10 * canvas->scale;
-  for (int i = 0; i < count; i++) {
-    ColorF color = {.r = 0.f, .g = 0.f, .b = 1.0f, .a = 1.0f};
-    Line line = lines[i];
-    // Move to world
-    vec2 points[2];
-    points[0][0] = line.a[0];
-    points[0][1] = line.a[1];
-    points[1][0] = line.b[0];
-    points[1][1] = line.b[1];
-    transform_points(&line.transform, points, points, 2);
-    draw_context_draw_thick_line(&renderer->draw_context, points[0], points[1], thickness, color);
+  ecs_iter_t it = ecs_query_iter(world, query);
+  while (ecs_query_next(&it)) {
+    Line *line = ecs_field(&it, Line, 0);
+    Position *transform = ecs_field(&it, Position, 1);
+
+    for (int i = 0; i < it.count; i++) {
+      ColorF color = {.r = 0.0f, .g = 0.0f, .b = 1.0f, .a = 1.0f};
+      // Move to world
+      vec2 points[2];
+      points[0][0] = line[i].ax;
+      points[0][1] = line[i].ay;
+      points[1][0] = line[i].bx;
+      points[1][1] = line[i].by;
+
+      transform_points(&transform[i], points, points, 2);
+      draw_context_draw_thick_line(&renderer->draw_context, points[0], points[1], thickness, color);
+    }
   }
 
   // Draw line

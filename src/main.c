@@ -14,6 +14,7 @@
 
 #include "components.h"
 #include "flecs.h"
+#include "flecs/addons/flecs_c.h"
 #include "renderer.h"
 
 #define CIMGUI_USE_OPENGL3
@@ -37,7 +38,6 @@ typedef struct {
 
   ecs_world_t *world;
 
-  Line line;
   bool show_debug;
 } AppState;
 
@@ -108,16 +108,16 @@ void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, App
         app_state->show_debug = !app_state->show_debug;
         break;
       case SDLK_W:
-        app_state->line.transform.position[1] += 10;
+        // app_state->line.transform.position[1] += 10;
         break;
       case SDLK_S:
-        app_state->line.transform.position[1] -= 10;
+        // app_state->line.transform.position[1] -= 10;
         break;
       case SDLK_A:
-        app_state->line.transform.position[0] -= 10;
+        // app_state->line.transform.position[0] -= 10;
         break;
       case SDLK_D:
-        app_state->line.transform.position[0] += 10;
+        // app_state->line.transform.position[0] += 10;
         break;
       }
     }
@@ -216,8 +216,8 @@ void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, ImGuiIO
     igSeparator();
 
     // Line data
-    Line *line = &app_state->line;
-    igText("Line world pos: [%.1f, %.1f]", line->transform.position[0], line->transform.position[1]);
+    // Line *line = &app_state->line;
+    // igText("Line world pos: [%.1f, %.1f]", line->transform.position[0], line->transform.position[1]);
     igSeparator();
 
     // BG color picker
@@ -266,9 +266,12 @@ int main() {
   io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
   // Setup world
+  // ecs_log_set_level(1);
   ecs_world_t *world = ecs_init();
+
   // Register component types
-  ECS_COMPONENT(world, Transform);
+  ECS_COMPONENT(world, Line);
+  ECS_COMPONENT(world, Position);
 
   // Setup app
   InputState control = {0};
@@ -280,9 +283,12 @@ int main() {
 
   // To test
   renderer.draw_context.canvas.position[0] += 100;
-  Transform transform = {.position = {100, 0}};
-  Line line = {.a = {0, 0}, .b = {200, 0}, .thickness = 20, .transform = transform};
-  app_state.line = line;
+  ecs_entity_t e1 = ecs_new(world);
+  ecs_set(world, e1, Position, {.pos_x = 10.0f, .pos_y = 20.0f});
+  ecs_set(world, e1, Line, {.ax = 0.0f, .ay = 0.0f, .bx = 100.0f, .by = 0.0f, .thickness = 10.0f});
+
+  // Create the query
+  ecs_query_t *line_transform_q = ecs_query(world, {.terms = {{ecs_id(Line)}, {ecs_id(Position)}}});
 
   SDL_Event event;
   while (app_state.running) {
@@ -296,7 +302,7 @@ int main() {
     }
 
     // Custom renderer
-    renderer_render(&renderer, &app_state.line, 1);
+    renderer_render(&renderer, app_state.world, line_transform_q);
 
     // Render ui
     imgui_render(&app_state, &renderer, io);
