@@ -1,6 +1,6 @@
-#include "flecs/addons/flecs_c.h"
-#include "flecs/private/api_defines.h"
+#include "flecs.h"
 #include "input.h"
+#include "renderer.h"
 #include <stdio.h>
 #define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
 #include "sdl_app.h"
@@ -24,7 +24,11 @@ SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
   // Register singletons
   ecs_set(world, ecs_id(Input), Input, {0});
 
+  // Manual system
+  // ECS_SYSTEM(world, renderer_resize_system, EcsOnUpdate);
+
   // Register systems
+  ECS_SYSTEM(world, handle_input_system, EcsOnUpdate, Input($));
   ECS_SYSTEM(world, Move, EcsOnUpdate);
 
   // Register modules
@@ -42,18 +46,12 @@ SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
 
   if (event->type == SDL_EVENT_QUIT) {
     return SDL_APP_SUCCESS; /* end the program, reporting success to the OS. */
+  } else if (event->type == SDL_EVENT_WINDOW_RESIZED) {
+    // ecs_run(world, ecs_id(renderer_resize_system), 0.0 /* delta_time */, NULL /* param */);
   }
 
   // Imgui event
   // custom event
-
-  // update input to test
-  if (input->alt == true) {
-    printf("Alt is true\n");
-  } else {
-    printf("Alt is false\n");
-  }
-  input->alt = !input->alt;
 
   return SDL_APP_CONTINUE; /* carry on with the program! */
 }
