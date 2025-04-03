@@ -1,376 +1,78 @@
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <SDL3/SDL_events.h>
-#include <SDL3/SDL_init.h>
-#include <SDL3/SDL_keycode.h>
-#include <SDL3/SDL_log.h>
-#include <SDL3/SDL_opengl.h>
-#include <SDL3/SDL_surface.h>
-#include <SDL3/SDL_video.h>
-#include <cglm/vec2.h>
-
-#include "canvas.h"
-#include "components.h"
-#include "flecs.h"
 #include "flecs/addons/flecs_c.h"
+#include "flecs/private/api_defines.h"
 #include "input.h"
-#include "renderer.h"
+#include <stdio.h>
+#define SDL_MAIN_USE_CALLBACKS 1 /* use the callbacks instead of main() */
+#include "sdl_app.h"
+#include <SDL3/SDL.h>
+#include <SDL3/SDL_main.h>
 
-#define CIMGUI_USE_OPENGL3
-#define CIMGUI_USE_SDL3
-#define CIMGUI_DEFINE_ENUMS_AND_STRUCTS
-#include "cimgui.h"
-#include "cimgui_impl.h"
-#define igGetIO igGetIO_Nil
+ECS_COMPONENT_DECLARE(Input);
 
-#define CANVAS_MIN_SCALE 0.1f
-#define CANVAS_MAX_SCALE 10.0f
+void Move(ecs_iter_t *it) {}
 
-#define WIDTH 800
-#define HEIGHT 600
+SDL_AppResult SDL_AppInit(void **appstate, int argc, char *argv[]) {
+  printf("SDL App Init\n");
+  ecs_world_t *world = ecs_init_w_args(argc, argv);
+  *appstate = world; // SDL app state will be a pointer to the world
 
-typedef struct {
-  bool resized;
-  bool running;
-  uint32_t width;
-  uint32_t height;
+  // Order matters!
 
-  ecs_world_t *world;
+  // Register components
+  ECS_COMPONENT_DEFINE(world, Input);
 
-  bool show_debug;
-} AppState;
+  // Register singletons
+  ecs_set(world, ecs_id(Input), Input, {0});
 
-typedef struct {
-  bool dragging;
-  int last_x, last_y;
-} InputState;
+  // Register systems
+  ECS_SYSTEM(world, Move, EcsOnUpdate);
 
-void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, AppState *app_state, Input *input);
+  // Register modules
+  ECS_IMPORT(world, Sdl);
 
-// Apply zoom scale with clamping
-void canvas_apply_zoom(Canvas *canvas, float zoom_factor) {
-  float new_scale = canvas->scale * zoom_factor;
-  if (new_scale < CANVAS_MIN_SCALE)
-    new_scale = CANVAS_MIN_SCALE;
-  if (new_scale > CANVAS_MAX_SCALE)
-    new_scale = CANVAS_MAX_SCALE;
-  canvas->scale = new_scale;
+  return SDL_APP_CONTINUE;
 }
 
-void canvsa_drag_system(ecs_iter_t *it) {
-  SoftwareOpenGlRenderer *renderer = ecs_field(it, SoftwareOpenGlRenderer, 0);
-  Input *input = ecs_field(it, Input, 1);
+SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event) {
+  // printf("APP: SDL event\n");
+  ecs_world_t *world = appstate;
 
-  Canvas *canvas = &renderer->draw_context.canvas;
+  // Get mutable input singleton
+  Input *input = ecs_get_mut(world, ecs_id(Input), Input);
 
-  if (input->mouse_dragging) {
-    printf("Hello from system, %.2f \n", canvas->position[0]);
-    float sensitivity = 0.4f;
-    float world_dx = -input->mouse_delta_x * powf(canvas->scale, sensitivity);
-    float world_dy = input->mouse_delta_y * powf(canvas->scale, sensitivity);
-    canvas_translate(canvas, world_dx, world_dy);
+  if (event->type == SDL_EVENT_QUIT) {
+    return SDL_APP_SUCCESS; /* end the program, reporting success to the OS. */
   }
-}
 
-void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
-  if (mouse_down) {
-    if (!state->dragging) {
-      state->dragging = true;
-      state->last_x = mouse_x;
-      state->last_y = mouse_y;
-      return;
-    }
+  // Imgui event
+  // custom event
 
-    int dx = mouse_x - state->last_x;
-    int dy = mouse_y - state->last_y;
-
-    // Apply scale to convert screen-space delta to world-space movement
-    float sensitivity = 0.4f; // tweak this value
-    float world_dx = -dx * powf(canvas->scale, sensitivity);
-    float world_dy = dy * powf(canvas->scale, sensitivity); // flip Y
-
-    canvas_translate(canvas, world_dx, world_dy);
-
-    state->last_x = mouse_x;
-    state->last_y = mouse_y;
+  // update input to test
+  if (input->alt == true) {
+    printf("Alt is true\n");
   } else {
-    state->dragging = false;
+    printf("Alt is false\n");
   }
+  input->alt = !input->alt;
+
+  return SDL_APP_CONTINUE; /* carry on with the program! */
 }
 
-void canvas_handle_zoom(Canvas *canvas, float zoom_factor, int mouse_x, int mouse_y) {
-  vec2 screen = {mouse_x, mouse_y};
-  vec2 world_before, world_after;
+SDL_AppResult SDL_AppIterate(void *appstate) {
+  // printf("SDL iterate\n");
+  ecs_world_t *world = appstate;
+  const App *app = ecs_singleton_get(world, App);
+  if (app->status != SDL_APP_CONTINUE) {
+    return app->status;
+  }
 
-  canvas_screen_to_world(canvas, screen, world_before);
-  canvas_apply_zoom(canvas, zoom_factor);
-  canvas_screen_to_world(canvas, screen, world_after);
+  ecs_progress(world, 0);
 
-  // Offset canvas so zoom appears centered on cursor
-  canvas_translate(canvas, world_before[0] - world_after[0], world_before[1] - world_after[1]);
+  app = ecs_singleton_get(world, App);
+  return app->status;
 }
 
-void imgui_render(AppState *app_state, SoftwareOpenGlRenderer *renderer, ImGuiIO *io) {
-  Canvas *canvas = &renderer->draw_context.canvas;
-  ImGui_ImplOpenGL3_NewFrame();
-  ImGui_ImplSDL3_NewFrame();
-  igNewFrame();
-
-  ImGuiViewport *viewport = igGetMainViewport();
-
-  igSetNextWindowPos((ImVec2){0, 0}, 0, (ImVec2){0, 0});
-  igSetNextWindowSize((ImVec2){(float)app_state->width, (float)app_state->height}, 0);
-  ImGuiWindowFlags flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
-                           ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoInputs | ImGuiWindowFlags_NoBackground;
-
-  // Fullscreen background image
-  igPushStyleVar_Vec2(ImGuiStyleVar_WindowPadding, (ImVec2){0, 0});
-  igPushStyleVar_Float(ImGuiStyleVar_WindowBorderSize, 0.0f);
-  igBegin("Background", NULL, flags);
-  igImage((ImTextureID)(intptr_t)renderer->texture, (ImVec2){(float)app_state->width, (float)app_state->height}, (ImVec2){0, 1}, (ImVec2){1, 0});
-  igEnd();
-  igPopStyleVar(2);
-
-  // Left Panel (Fullscreen Vertical)
-  if (app_state->show_debug) {
-    ImGuiViewport *viewport = igGetMainViewport();
-    ImVec2 panel_pos = viewport->Pos;
-    ImVec2 panel_size = {300, viewport->Size.y};
-
-    igSetNextWindowPos(panel_pos, ImGuiCond_None, (ImVec2){0.0f, 0.0f});
-    igSetNextWindowSize(panel_size, ImGuiCond_None);
-
-    igBegin("Debug Panel", NULL, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
-
-    igText("FPS: %.1f", 1.0f / io->DeltaTime);
-    igText("Frame time %.2f ms/frame", 1000.0f / igGetIO()->Framerate);
-    igSeparator();
-
-    igText("Canvas Zoom: %.2f", canvas->scale);
-    igText("Canvas Position: [%.1f, %.1f]", canvas->position[0], canvas->position[1]);
-    igSeparator();
-
-    // Line data
-    // Line *line = &app_state->line;
-    // igText("Line world pos: [%.1f, %.1f]", line->transform.position[0], line->transform.position[1]);
-    igSeparator();
-
-    // BG color picker
-    igText("Clear color");
-    // TODO: Create state
-    static float bg_color[4] = {0};
-    if (igColorEdit4("Color", bg_color, ImGuiColorEditFlags_None)) {
-      ColorF bg_colorf = {
-          .r = bg_color[0],
-          .g = bg_color[1],
-          .b = bg_color[2],
-          .a = bg_color[3],
-      };
-      renderer_set_clear_color(renderer, bg_colorf);
-    }
-
-    igEnd();
-  }
-
-  igRender();
-}
-
-int main() {
-  if (SDL_Init(SDL_INIT_VIDEO) == 0) {
-    SDL_Log("SDL_Init failed: %s", SDL_GetError());
-    return -1;
-  }
-
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
-  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
-  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
-
-  SDL_Window *window = SDL_CreateWindow("Software Renderer + ImGui", WIDTH, HEIGHT, SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
-  SDL_GLContext gl_context = SDL_GL_CreateContext(window);
-  SDL_GL_MakeCurrent(window, gl_context);
-  SDL_GL_SetSwapInterval(1); // vsync
-
-  // Setup ImGui
-  igCreateContext(NULL);
-  igStyleColorsDark(NULL);
-
-  ImGui_ImplSDL3_InitForOpenGL(window, gl_context);
-  ImGui_ImplOpenGL3_Init("#version 330");
-  ImGuiIO *io = igGetIO();
-  io->ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
-
-  // Setup world
-  // ecs_log_set_level(1);
-  ecs_world_t *world = ecs_init();
-
-  // Register component types
-  ECS_COMPONENT(world, Line);
-  ECS_COMPONENT(world, Selected);
-  ECS_COMPONENT(world, Position);
-  ECS_COMPONENT(world, Input);
-  ECS_COMPONENT(world, SoftwareOpenGlRenderer); // register if not already
-
-  // Setup app
-  InputState control = {0};
-  AppState app_state = {.resized = true, .running = true, .width = WIDTH, .height = HEIGHT, .show_debug = true, .world = world};
-  SoftwareOpenGlRenderer renderer = renderer_create(WIDTH, HEIGHT);
-
-  // Start bg_color
-  renderer_set_clear_color(&renderer, (ColorF){0});
-
-  // Ecs systems
-  ECS_SYSTEM(world, canvsa_drag_system, EcsOnUpdate, SoftwareOpenGlRenderer($), Input($));
-  ECS_SYSTEM(world, render_system, EcsOnUpdate, Line, Position, SoftwareOpenGlRenderer($));
-  ECS_SYSTEM(world, renderer_resize_system, EcsOnUpdate, SoftwareOpenGlRenderer($));
-
-  // To test
-  // renderer.draw_context.canvas.position[0] += 100;
-  ecs_entity_t e1 = ecs_new(world);
-  ecs_set(world, e1, Position, {.pos = {0, 0}});
-  ecs_set(world, e1, Line, {.a = {0, 0}, .b = {100, 0}, .thickness = 10.0f});
-
-  // Create the query
-  ecs_query_t *line_position_q = ecs_query(world, {.terms = {{ecs_id(Line)}, {ecs_id(Position)}}});
-  ecs_query_t *selected_position_q = ecs_query(world, {.terms = {{ecs_id(Selected)}, {ecs_id(Position)}}});
-
-  // Set singletons
-  ecs_singleton_set(world, Input, {0});
-  ecs_singleton_set_ptr(world, SoftwareOpenGlRenderer, &renderer);
-
-  SDL_Event event;
-  while (app_state.running) {
-    handle_input(&event, &renderer.draw_context.canvas, &control, &app_state, input);
-
-    if (app_state.resized) {
-      printf("Resized: %d, %d\n", app_state.width, app_state.height);
-
-      ResizeParams params = {.height = app_state.height, .width = app_state.width};
-      ecs_run(world, ecs_id(renderer_resize_system), 0.0f, &params);
-
-      // renderer_handle_resize(&renderer, app_state.width, app_state.height);
-      app_state.resized = false;
-      io->DisplaySize = (ImVec2){(float)app_state.width / io->DisplayFramebufferScale.x, (float)app_state.height / io->DisplayFramebufferScale.y};
-    }
-
-    // Run systems
-    ecs_run(world, ecs_id(canvsa_drag_system), 0.0 /* delta_time */, NULL /* param */);
-    printf("After system, renderer canvas pos: %.2f\n", renderer.draw_context.canvas.position[0]);
-
-    // Custom renderer
-    ecs_run(world, ecs_id(render_system), 0.0 /* delta_time */, NULL /* param */);
-    // renderer_render(&renderer, app_state.world, line_position_q);
-
-    // Render ui
-    imgui_render(&app_state, &renderer, io);
-
-    // Opengl render
-    glViewport(0, 0, (int)io->DisplaySize.x, (int)io->DisplaySize.y);
-    glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
-    SDL_GL_SwapWindow(window);
-  }
-
-  // Cleanup
-  ecs_fini(app_state.world);
-  ImGui_ImplOpenGL3_Shutdown();
-  ImGui_ImplSDL3_Shutdown();
-  igDestroyContext(NULL);
-  renderer_free(&renderer);
-  SDL_DestroyWindow(window);
-  SDL_Quit();
-  printf("End\n");
-  return 0;
-}
-
-void input_reset(Input *input) {
-  for (int i = 0; i < MAX_KEYS; i++) {
-    input->keys[i].pressed = false;
-    input->keys[i].released = false;
-  }
-  for (int i = 0; i < MAX_MOUSE_BUTTONS; i++) {
-    input->mouse_buttons[i].pressed = false;
-    input->mouse_buttons[i].released = false;
-  }
-
-  input->mouse_delta_x = 0;
-  input->mouse_delta_y = 0;
-  input->wheel_x = 0;
-  input->wheel_y = 0;
-
-  input->zoom_requested = false;
-  input->mouse_was_dragging = input->mouse_dragging;
-}
-
-void input_update_from_sdl3(Input *input, const SDL_Event *e) {
-  switch (e->type) {
-  case SDL_EVENT_MOUSE_BUTTON_DOWN:
-  case SDL_EVENT_MOUSE_BUTTON_UP: {
-    uint8_t btn = e->button.button;
-    if (btn >= 0 && btn < MAX_MOUSE_BUTTONS) {
-      bool is_down = (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
-      KeyState *mb = &input->mouse_buttons[btn];
-      if (mb->down != is_down) {
-        mb->down = is_down;
-        mb->pressed = is_down;
-        mb->released = !is_down;
-      }
-
-      if (btn == SDL_BUTTON_MIDDLE) {
-        if (is_down) {
-          input->mouse_dragging = true;
-          input->drag_origin_x = input->mouse_x;
-          input->drag_origin_y = input->mouse_y;
-        } else {
-          input->mouse_dragging = false;
-        }
-      }
-    }
-    break;
-  }
-
-  case SDL_EVENT_MOUSE_MOTION:
-    input->mouse_delta_x = e->motion.x - input->mouse_x;
-    input->mouse_delta_y = e->motion.y - input->mouse_y;
-    input->mouse_x = e->motion.x;
-    input->mouse_y = e->motion.y;
-    break;
-
-  case SDL_EVENT_MOUSE_WHEEL:
-    input->zoom_requested = true;
-    input->zoom_factor = SDL_powf(1.1f, e->wheel.y);
-    input->zoom_center_x = input->mouse_x;
-    input->zoom_center_y = input->mouse_y;
-    input->wheel_x += e->wheel.x;
-    input->wheel_y += e->wheel.y;
-    break;
-
-    // rest unchanged...
-  }
-}
-
-void handle_input_system(ecs_iter_t *it) {
-  // Pointer to a pointer
-  SDL_Event *event = *(SDL_Event **)it->param;
-  input_reset(input);
-
-  while (SDL_PollEvent(event)) {
-    if (event->type == SDL_EVENT_QUIT) {
-      app_state->running = false;
-    }
-
-    if (event->type == SDL_EVENT_WINDOW_RESIZED) {
-      app_state->resized = true;
-      app_state->width = event->window.data1;
-      app_state->height = event->window.data2;
-    }
-
-    ImGui_ImplSDL3_ProcessEvent(event);
-    input_update_from_sdl3(input, event);
-  }
+void SDL_AppQuit(void *appstate, SDL_AppResult result) {
+  ecs_world_t *world = appstate;
+  ecs_fini(world);
 }

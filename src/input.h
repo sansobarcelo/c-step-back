@@ -1,6 +1,7 @@
 #ifndef COMPONENTS_INPUT_H
 #define COMPONENTS_INPUT_H
 
+#include "flecs.h"
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -36,5 +37,11 @@ typedef struct {
   int zoom_center_x;
   int zoom_center_y;
 } Input;
+
+void input_updated(ecs_iter_t *it) {
+  Input *input = (Input *)ecs_field(it, Input, 0);
+  // update
+  input->alt = true;
+}
 
 #endif
