@@ -12,6 +12,7 @@
 #include <SDL3/SDL_video.h>
 #include <cglm/vec2.h>
 
+#include "canvas.h"
 #include "components.h"
 #include "flecs.h"
 #include "flecs/addons/flecs_c.h"
@@ -57,6 +58,21 @@ void canvas_apply_zoom(Canvas *canvas, float zoom_factor) {
   if (new_scale > CANVAS_MAX_SCALE)
     new_scale = CANVAS_MAX_SCALE;
   canvas->scale = new_scale;
+}
+
+void canvsa_drag_system(ecs_iter_t *it) {
+  SoftwareOpenGlRenderer *renderer = ecs_field(it, SoftwareOpenGlRenderer, 0);
+  Input *input = ecs_field(it, Input, 1);
+
+  Canvas *canvas = &renderer->draw_context.canvas;
+
+  if (input->mouse_dragging) {
+    printf("Hello from system, %.2f \n", canvas->position[0]);
+    float sensitivity = 0.4f;
+    float world_dx = -input->mouse_delta_x * powf(canvas->scale, sensitivity);
+    float world_dy = input->mouse_delta_y * powf(canvas->scale, sensitivity);
+    canvas_translate(canvas, world_dx, world_dy);
+  }
 }
 
 void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
@@ -196,9 +212,7 @@ int main() {
   ECS_COMPONENT(world, Selected);
   ECS_COMPONENT(world, Position);
   ECS_COMPONENT(world, Input);
-
-  // Set default values
-  ecs_singleton_set(world, Input, {0});
+  ECS_COMPONENT(world, SoftwareOpenGlRenderer); // register if not already
 
   // Setup app
   InputState control = {0};
@@ -208,8 +222,13 @@ int main() {
   // Start bg_color
   renderer_set_clear_color(&renderer, (ColorF){0});
 
+  // Ecs systems
+  ECS_SYSTEM(world, canvsa_drag_system, EcsOnUpdate, SoftwareOpenGlRenderer($), Input($));
+  ECS_SYSTEM(world, render_system, EcsOnUpdate, Line, Position, SoftwareOpenGlRenderer($));
+  ECS_SYSTEM(world, renderer_resize_system, EcsOnUpdate, SoftwareOpenGlRenderer($));
+
   // To test
-  renderer.draw_context.canvas.position[0] += 100;
+  // renderer.draw_context.canvas.position[0] += 100;
   ecs_entity_t e1 = ecs_new(world);
   ecs_set(world, e1, Position, {.pos = {0, 0}});
   ecs_set(world, e1, Line, {.a = {0, 0}, .b = {100, 0}, .thickness = 10.0f});
@@ -218,8 +237,9 @@ int main() {
   ecs_query_t *line_position_q = ecs_query(world, {.terms = {{ecs_id(Line)}, {ecs_id(Position)}}});
   ecs_query_t *selected_position_q = ecs_query(world, {.terms = {{ecs_id(Selected)}, {ecs_id(Position)}}});
 
-  // Input singleton
-  Input *input = ecs_singleton_get(app_state.world, Input);
+  // Set singletons
+  ecs_singleton_set(world, Input, {0});
+  ecs_singleton_set_ptr(world, SoftwareOpenGlRenderer, &renderer);
 
   SDL_Event event;
   while (app_state.running) {
@@ -227,13 +247,22 @@ int main() {
 
     if (app_state.resized) {
       printf("Resized: %d, %d\n", app_state.width, app_state.height);
-      renderer_handle_resize(&renderer, app_state.width, app_state.height);
+
+      ResizeParams params = {.height = app_state.height, .width = app_state.width};
+      ecs_run(world, ecs_id(renderer_resize_system), 0.0f, &params);
+
+      // renderer_handle_resize(&renderer, app_state.width, app_state.height);
       app_state.resized = false;
       io->DisplaySize = (ImVec2){(float)app_state.width / io->DisplayFramebufferScale.x, (float)app_state.height / io->DisplayFramebufferScale.y};
     }
 
+    // Run systems
+    ecs_run(world, ecs_id(canvsa_drag_system), 0.0 /* delta_time */, NULL /* param */);
+    printf("After system, renderer canvas pos: %.2f\n", renderer.draw_context.canvas.position[0]);
+
     // Custom renderer
-    renderer_render(&renderer, app_state.world, line_position_q);
+    ecs_run(world, ecs_id(render_system), 0.0 /* delta_time */, NULL /* param */);
+    // renderer_render(&renderer, app_state.world, line_position_q);
 
     // Render ui
     imgui_render(&app_state, &renderer, io);
@@ -282,7 +311,7 @@ void input_update_from_sdl3(Input *input, const SDL_Event *e) {
   switch (e->type) {
   case SDL_EVENT_MOUSE_BUTTON_DOWN:
   case SDL_EVENT_MOUSE_BUTTON_UP: {
-    int btn = e->button.button;
+    uint8_t btn = e->button.button;
     if (btn >= 0 && btn < MAX_MOUSE_BUTTONS) {
       bool is_down = (e->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
       KeyState *mb = &input->mouse_buttons[btn];
@@ -325,8 +354,11 @@ void input_update_from_sdl3(Input *input, const SDL_Event *e) {
   }
 }
 
-void handle_input(SDL_Event *event, Canvas *canvas, InputState *input_state, AppState *app_state, Input *input) {
+void handle_input_system(ecs_iter_t *it) {
+  // Pointer to a pointer
+  SDL_Event *event = *(SDL_Event **)it->param;
   input_reset(input);
+
   while (SDL_PollEvent(event)) {
     if (event->type == SDL_EVENT_QUIT) {
       app_state->running = false;
