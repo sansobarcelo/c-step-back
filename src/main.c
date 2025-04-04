@@ -12,9 +12,11 @@
 #include <SDL3/SDL_video.h>
 #include <cglm/vec2.h>
 
+#include "canvas.h"
 #include "flecs.h"
 #include "flecs/addons/flecs_c.h"
 #include "flecs/private/api_defines.h"
+#include "graphics/rasterizer.h"
 #include "input.h"
 #include "renderer.h"
 
@@ -38,6 +40,8 @@ typedef struct {
 
 ECS_COMPONENT_DECLARE(AppState);
 ECS_COMPONENT_DECLARE(ResizeParams);
+ECS_COMPONENT_DECLARE(Canvas);
+ECS_COMPONENT_DECLARE(Surface);
 
 // // Apply zoom scale with clamping
 // void canvas_apply_zoom(Canvas *canvas, float zoom_factor) {
@@ -87,13 +91,14 @@ ECS_COMPONENT_DECLARE(ResizeParams);
 //   canvas_translate(canvas, world_before[0] - world_after[0], world_before[1] - world_after[1]);
 // }
 
-void handle_input(AppState *app_state, ecs_world_t *world) {
+void handle_input(AppState *app_state, ecs_world_t *world, ecs_entity_t surface_resize_s) {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
     ImGui_ImplSDL3_ProcessEvent(&event);
 
     if (event.type == SDL_EVENT_QUIT) {
       app_state->running = false;
+      // ecs_set(world, ecs_id(ResizeParams), ResizeParams, {.width = event.window.data1, .height = event.window.data2});
     }
 
     // if (event->type == SDL_EVENT_KEY_DOWN) {
@@ -162,7 +167,8 @@ void handle_input(AppState *app_state, ecs_world_t *world) {
     // }
 
     if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-      ecs_set(world, ecs_id(ResizeParams), ResizeParams, {.width = event.window.data1, .height = event.window.data2});
+      ResizeParams resize_params = {.width = WIDTH, .height = HEIGHT};
+      ecs_run(world, surface_resize_s, 0.0, &resize_params);
     }
   }
 }
@@ -263,23 +269,38 @@ int main() {
   // Register component types
   ECS_COMPONENT_DEFINE(world, AppState);
   ECS_COMPONENT_DEFINE(world, ResizeParams);
+  ECS_COMPONENT_DEFINE(world, Canvas);
+  ECS_COMPONENT_DEFINE(world, Surface);
 
   // Setup app
   AppState app_state = {.running = true, .show_debug = true};
-  SoftwareOpenGlRenderer renderer = renderer_create(WIDTH, HEIGHT);
+
+  printf("AAAAAA\n");
 
   // Set singletons
-  ecs_singleton_set_ptr(world, AppState, &app_state);
 
-  // Start bg_color
+  // Observers
+  // ecs_observer(world, {.query.terms = {{ecs_id(ResizeParams)}, {ecs_id(Canvas)}}, .events = {EcsOnSet}, .callback = renderer_resize_system});
+  // ecs_observer(world, {.query.terms = {{ecs_id(ResizeParams), .src.id = 0}, {ecs_id(Canvas), .src.id = 0}},
+  //                      .events = {EcsOnSet},
+  //                      .callback = renderer_resize_system});
+
+  // Systems
+  ecs_entity_t surface_resize_s = ecs_system(
+      world, {.entity = ecs_entity(world, {.name = "ManualSystem"}), .query.terms = {{ecs_id(Surface)}}, .callback = surface_resize_system});
+
+  // Initial data
+  ecs_set(world, ecs_id(Surface), Surface, {0});
+
+  // Initial setup
+  ResizeParams resize_params = {.width = WIDTH, .height = HEIGHT};
+  ecs_run(world, surface_resize_s, 0.0, &resize_params);
+
+  // ecs_set(world, ecs_id(ResizeParams), ResizeParams, {.width = WIDTH, .height = HEIGHT});
   // renderer_set_clear_color(&renderer, (ColorF){0});
 
-  AppState *ptr = ecs_get_mut(world, ecs_id(AppState), AppState);
   while (app_state.running) {
-    if (!ptr->running) {
-      printf("App ptr: \n");
-    }
-    handle_input(&app_state, world);
+    handle_input(&app_state, world, surface_resize_s);
 
     // Custom renderer
     // renderer_render(&renderer, app_state.world, line_transform_q);

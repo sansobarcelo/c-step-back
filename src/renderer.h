@@ -18,6 +18,6 @@ void renderer_set_clear_color(SoftwareOpenGlRenderer *renderer, ColorF color);
 
 // ECS
 void render_system(ecs_iter_t *it);
-void renderer_resize_system(ecs_iter_t *it);
+void surface_resize_system(ecs_iter_t *it);
 
 #endif

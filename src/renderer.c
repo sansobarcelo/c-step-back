@@ -7,6 +7,7 @@
 #include "components.h"
 #include "drawer.h"
 #include "graphics/rasterizer.h"
+#include "input.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -17,12 +18,13 @@ void update_texture(GLuint texture, const Surface *surface) {
   glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, surface->width, surface->height, GL_RGBA, GL_UNSIGNED_BYTE, surface->buffer);
 }
 
-Surface create_surface(uint32_t width, uint32_t height) {
-  return (Surface){
-      .width = width,
-      .height = height,
-      .buffer = malloc(width * height * sizeof(uint32_t)),
-  };
+void resize_surface(Surface *surface, uint32_t width, uint32_t height) {
+  if (surface->buffer) {
+    free(surface->buffer);
+  }
+  surface->width = width;
+  surface->height = height;
+  surface->buffer = malloc(width * height * sizeof(uint32_t));
 }
 
 GLuint create_texture_from_surface(const Surface *surface) {
@@ -39,19 +41,16 @@ GLuint create_texture_from_surface(const Surface *surface) {
 // End Private
 
 // Public implementations
-void renderer_resize_system(ecs_iter_t *it) {
+void surface_resize_system(ecs_iter_t *it) {
   printf("Resized!\n");
-  SoftwareOpenGlRenderer *renderer = ecs_field(it, SoftwareOpenGlRenderer, 0); // Renderer($)
-  Canvas *canvas = &renderer->draw_context.canvas;
-  Surface *surface = &renderer->draw_context.surface;
 
-  // ResizeParams *params = it->param;
-  // uint32_t new_width = params->width;
-  // uint32_t new_height = params->height;
-  //
-  // free(surface->buffer);
-  // glDeleteTextures(1, &renderer->texture);
+  Surface *surface = ecs_field(it, Surface, 0);
+  ResizeParams *resize_params = (ResizeParams *)it->param;
+
+  resize_surface(surface, resize_params->width, resize_params->height);
+
   // renderer->draw_context.surface = create_surface(new_width, new_height);
+  // glDeleteTextures(1, &renderer->texture);
   // renderer->texture = create_texture_from_surface(&renderer->draw_context.surface);
   // renderer->draw_context.canvas.height = new_height;
   // renderer->draw_context.canvas.width = new_width;
@@ -123,7 +122,8 @@ void renderer_render(SoftwareOpenGlRenderer *renderer, ecs_world_t *world, ecs_q
 }
 
 SoftwareOpenGlRenderer renderer_create(uint32_t width, uint32_t height) {
-  Surface surface = create_surface(width, height);
+  Surface surface;
+  resize_surface(&surface, width, height);
   GLuint texture = create_texture_from_surface(&surface);
   Canvas canvas;
   canvas_init(&canvas, width, height);
@@ -148,7 +148,7 @@ void renderer_handle_resize(SoftwareOpenGlRenderer *renderer, uint32_t new_width
   Surface *surface = &renderer->draw_context.surface;
   free(surface->buffer);
   glDeleteTextures(1, &renderer->texture);
-  renderer->draw_context.surface = create_surface(new_width, new_height);
+  // renderer->draw_context.surface = create_surface(new_width, new_height);
   renderer->texture = create_texture_from_surface(&renderer->draw_context.surface);
   renderer->draw_context.canvas.height = new_height;
   renderer->draw_context.canvas.width = new_width;
