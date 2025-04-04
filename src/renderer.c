@@ -45,16 +45,16 @@ void renderer_resize_system(ecs_iter_t *it) {
   Canvas *canvas = &renderer->draw_context.canvas;
   Surface *surface = &renderer->draw_context.surface;
 
-  ResizeParams *params = it->param;
-  uint32_t new_width = params->width;
-  uint32_t new_height = params->height;
-
-  free(surface->buffer);
-  glDeleteTextures(1, &renderer->texture);
-  renderer->draw_context.surface = create_surface(new_width, new_height);
-  renderer->texture = create_texture_from_surface(&renderer->draw_context.surface);
-  renderer->draw_context.canvas.height = new_height;
-  renderer->draw_context.canvas.width = new_width;
+  // ResizeParams *params = it->param;
+  // uint32_t new_width = params->width;
+  // uint32_t new_height = params->height;
+  //
+  // free(surface->buffer);
+  // glDeleteTextures(1, &renderer->texture);
+  // renderer->draw_context.surface = create_surface(new_width, new_height);
+  // renderer->texture = create_texture_from_surface(&renderer->draw_context.surface);
+  // renderer->draw_context.canvas.height = new_height;
+  // renderer->draw_context.canvas.width = new_width;
 }
 
 void render_system(ecs_iter_t *it) {

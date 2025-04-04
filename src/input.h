@@ -14,6 +14,4 @@ typedef struct {
 } ResizeParams;
 
 extern ECS_COMPONENT_DECLARE(ResizeParams);
-
-void input_register_components(ecs_world_t *world);
 #endif

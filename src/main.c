@@ -36,15 +36,18 @@ typedef struct {
   bool show_debug;
 } AppState;
 
-// Apply zoom scale with clamping
-void canvas_apply_zoom(Canvas *canvas, float zoom_factor) {
-  float new_scale = canvas->scale * zoom_factor;
-  if (new_scale < CANVAS_MIN_SCALE)
-    new_scale = CANVAS_MIN_SCALE;
-  if (new_scale > CANVAS_MAX_SCALE)
-    new_scale = CANVAS_MAX_SCALE;
-  canvas->scale = new_scale;
-}
+ECS_COMPONENT_DECLARE(AppState);
+ECS_COMPONENT_DECLARE(ResizeParams);
+
+// // Apply zoom scale with clamping
+// void canvas_apply_zoom(Canvas *canvas, float zoom_factor) {
+//   float new_scale = canvas->scale * zoom_factor;
+//   if (new_scale < CANVAS_MIN_SCALE)
+//     new_scale = CANVAS_MIN_SCALE;
+//   if (new_scale > CANVAS_MAX_SCALE)
+//     new_scale = CANVAS_MAX_SCALE;
+//   canvas->scale = new_scale;
+// }
 
 // void canvas_handle_drag(Canvas *canvas, InputState *state, int mouse_x, int mouse_y, bool mouse_down) {
 //   if (mouse_down) {
@@ -84,14 +87,13 @@ void canvas_apply_zoom(Canvas *canvas, float zoom_factor) {
 //   canvas_translate(canvas, world_before[0] - world_after[0], world_before[1] - world_after[1]);
 // }
 
-void handle_input(ecs_world_t *world) {
+void handle_input(AppState *app_state, ecs_world_t *world) {
   SDL_Event event;
   while (SDL_PollEvent(&event)) {
     ImGui_ImplSDL3_ProcessEvent(&event);
 
     if (event.type == SDL_EVENT_QUIT) {
-      App *app = ecs_get_mut(world, ecs_id(App), App);
-      // app_state->running = false;
+      app_state->running = false;
     }
 
     // if (event->type == SDL_EVENT_KEY_DOWN) {
@@ -259,17 +261,25 @@ int main() {
   ecs_world_t *world = ecs_init();
 
   // Register component types
-  input_register_components(world);
+  ECS_COMPONENT_DEFINE(world, AppState);
+  ECS_COMPONENT_DEFINE(world, ResizeParams);
 
   // Setup app
   AppState app_state = {.running = true, .show_debug = true};
   SoftwareOpenGlRenderer renderer = renderer_create(WIDTH, HEIGHT);
 
+  // Set singletons
+  ecs_singleton_set_ptr(world, AppState, &app_state);
+
   // Start bg_color
   // renderer_set_clear_color(&renderer, (ColorF){0});
 
+  AppState *ptr = ecs_get_mut(world, ecs_id(AppState), AppState);
   while (app_state.running) {
-    handle_input(world);
+    if (!ptr->running) {
+      printf("App ptr: \n");
+    }
+    handle_input(&app_state, world);
 
     // Custom renderer
     // renderer_render(&renderer, app_state.world, line_transform_q);
@@ -284,14 +294,14 @@ int main() {
     //
     // ImGui_ImplOpenGL3_RenderDrawData(igGetDrawData());
     SDL_GL_SwapWindow(window);
-    break;
   }
 
   // Cleanup
   ecs_fini(world);
-  ImGui_ImplOpenGL3_Shutdown();
-  ImGui_ImplSDL3_Shutdown();
-  igDestroyContext(NULL);
+
+  // ImGui_ImplOpenGL3_Shutdown();
+  // ImGui_ImplSDL3_Shutdown();
+  // igDestroyContext(NULL);
   // renderer_free(&renderer);
   SDL_DestroyWindow(window);
   SDL_Quit();
