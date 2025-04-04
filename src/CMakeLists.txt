@@ -1,6 +1,6 @@
 add_executable(main)
 
-target_sources(main PRIVATE main.c sdl_app.c renderer.c canvas.c drawer.c components.c graphics/rasterizer.c)
+target_sources(main PRIVATE main.c renderer.c canvas.c drawer.c components.c graphics/rasterizer.c)
 target_link_libraries(main PRIVATE vendor)
 
 if(NOT WIN32)

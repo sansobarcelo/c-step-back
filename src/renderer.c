@@ -1,11 +1,11 @@
 
 #include "renderer.h"
+
 #include "SDL3/SDL_opengl.h"
 #include "canvas.h"
 #include "cglm/types.h"
 #include "components.h"
 #include "drawer.h"
-#include "flecs.h"
 #include "graphics/rasterizer.h"
 #include <stdint.h>
 #include <stdio.h>
